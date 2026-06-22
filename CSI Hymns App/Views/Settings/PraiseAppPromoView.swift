@@ -1,15 +1,16 @@
 import SwiftUI
 
-/// A premium, App Store-styled promotion screen for the related "Praise App" devotions suite.
+/// App Store promotion for Worship Companion + (related devotions app).
 public struct PraiseAppPromoView: View {
     @Environment(\.openURL) private var openURL
     @State private var theme = ThemeManager.shared
+    
+    private static let appStoreURL = URL(string: "https://apps.apple.com/in/app/worship-companion/id6759990066")!
     
     public init() {}
     
     public var body: some View {
         ZStack {
-            // Adaptive theme background
             theme.backgroundColor
                 .ignoresSafeArea()
             
@@ -20,26 +21,19 @@ public struct PraiseAppPromoView: View {
             
             ScrollView {
                 VStack(spacing: 28) {
-                    // App Icon Card Hero
                     appPromoHeroCard
-                    
-                    // Features list
                     featuresOutline
-                    
-                    // Call to Action
                     downloadStoreButton
                 }
                 .padding(24)
             }
         }
-        .navigationTitle("Related Devotions")
+        .navigationTitle("Worship Companion +")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(theme.secondaryBackgroundColor, for: .navigationBar)
         .toolbarColorScheme(theme.colorScheme, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
     }
-    
-    // MARK: - Subviews
     
     private var appPromoHeroCard: some View {
         VStack(spacing: 16) {
@@ -47,21 +41,22 @@ public struct PraiseAppPromoView: View {
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 96, height: 96)
-                .cornerRadius(22)
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .shadow(color: Color.black.opacity(0.15), radius: 12, x: 0, y: 6)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 22)
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
                         .stroke(theme.strokeColor, lineWidth: 1)
                 )
             
             VStack(spacing: 6) {
-                Text("Praise App")
+                Text("Worship Companion +")
                     .font(.system(size: 24, weight: .black))
                     .foregroundColor(theme.textPrimary)
                 
-                Text("The Ultimate Companion Devotions Suite")
+                Text("Your all-in-one praise and worship lyrics app")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(theme.textSecondary)
+                    .multilineTextAlignment(.center)
             }
         }
         .padding(.top, 16)
@@ -69,28 +64,28 @@ public struct PraiseAppPromoView: View {
     
     private var featuresOutline: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("Why Download Praise App?")
+            Text("Why Download Worship Companion +?")
                 .font(.system(size: 16, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .padding(.horizontal, 4)
             
             VStack(spacing: 14) {
                 featureItemRow(
-                    title: "Universal search index",
-                    description: "Access thousands of additional vernacular and bilingual songs offline.",
-                    emoji: "🔍"
+                    title: "Offline song library",
+                    description: "Access a wide collection of praise and worship songs even without internet.",
+                    emoji: "📖"
                 )
                 
                 featureItemRow(
                     title: "Smart custom folders",
-                    description: "Share worship setlists directly with parish members instantly.",
+                    description: "Organize setlists and share worship folders with your parish.",
                     emoji: "📁"
                 )
                 
                 featureItemRow(
-                    title: "Full audio accompaniments",
-                    description: "Universal accompaniment tracks and instrumentals suitable for congregational play.",
-                    emoji: "🎹"
+                    title: "Lyrics from images",
+                    description: "Convert scanned or photographed text into editable worship lyrics on device.",
+                    emoji: "📷"
                 )
             }
         }
@@ -127,10 +122,7 @@ public struct PraiseAppPromoView: View {
     
     private var downloadStoreButton: some View {
         Button {
-            // Launches related devotions App Store direct search/download URI
-            if let uri = URL(string: "https://apps.apple.com") {
-                openURL(uri)
-            }
+            openURL(Self.appStoreURL)
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: "applelogo")

@@ -116,15 +116,16 @@ public struct AuthView: View {
     
     private var headerSection: some View {
         VStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(Color.white.opacity(0.08))
-                    .frame(width: 86, height: 86)
-                    .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
-                
-                Text("🔐")
-                    .font(.system(size: 38))
-            }
+            Image("app_logo")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 86, height: 86)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                )
+                .shadow(color: Color.black.opacity(0.2), radius: 10, y: 4)
             
             VStack(spacing: 4) {
                 Text(viewModel.isSignUp ? "Create Account" : "Welcome Back")

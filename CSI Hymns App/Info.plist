@@ -17,6 +17,8 @@
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>UIDesignRequiresCompatibility</key>
+	<true/>
 	<key>NSUserNotificationsUsageDescription</key>
 	<string>CSI Hymns Book may send optional updates about hymn content and app announcements.</string>
 	<key>UIBackgroundModes</key>

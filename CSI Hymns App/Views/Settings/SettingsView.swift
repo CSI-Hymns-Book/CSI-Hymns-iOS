@@ -130,7 +130,7 @@ public struct SettingsView: View {
                     }
                     
                     NavigationLink(destination: PraiseAppPromoView()) {
-                        settingsRowLabel(title: "Related Devotions", subtitle: "Download Praise App suite", iconName: "sparkles")
+                        settingsRowLabel(title: "Worship Companion +", subtitle: "Download our praise & worship lyrics app", iconName: "sparkles")
                     }
                     
                     Button {

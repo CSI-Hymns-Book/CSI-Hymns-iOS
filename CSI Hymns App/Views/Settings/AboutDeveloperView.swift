@@ -46,22 +46,20 @@ public struct AboutDeveloperView: View {
     
     private var developerHeader: some View {
         VStack(spacing: 16) {
-            ZStack {
-                Circle()
-                    .fill(theme.surfaceColor)
-                    .frame(width: 110, height: 110)
-                    .overlay(Circle().stroke(theme.cardStroke, lineWidth: 1))
-                
-                Text("👨‍💻")
-                    .font(.system(size: 58))
-            }
+            Image("developer_pfp")
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: 110, height: 110)
+                .clipShape(Circle())
+                .overlay(Circle().stroke(theme.cardStroke, lineWidth: 1))
+                .shadow(color: Color.black.opacity(0.12), radius: 8, y: 4)
             
             VStack(spacing: 4) {
                 Text("Reynold")
                     .font(.system(size: 22, weight: .bold))
                     .foregroundColor(theme.textPrimary)
                 
-                Text("Staff iOS Engineer & Architect")
+                Text("Full-Stack Developer | Cyber Security Enthusiast")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(theme.textSecondary)
             }
@@ -71,6 +69,16 @@ public struct AboutDeveloperView: View {
     
     private var appMissionCard: some View {
         VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Spacer()
+                Image("app_logo")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 72, height: 72)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                Spacer()
+            }
+            
             Text("CSI Hymns Mission")
                 .font(.system(size: 16, weight: .bold))
                 .foregroundColor(theme.textPrimary)
