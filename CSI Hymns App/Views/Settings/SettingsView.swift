@@ -174,8 +174,7 @@ public struct SettingsView: View {
         }
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(theme.secondaryBackgroundColor, for: .navigationBar)
-        .toolbarColorScheme(theme.colorScheme, for: .navigationBar)
+        .csiGlassNavigationBar(theme: theme)
         .toolbar(.hidden, for: .tabBar) // Hide Bottom Tabbar
         .alert("Delete Account?", isPresented: $isShowingDeleteAlert) {
             Button("Cancel", role: .cancel) {}

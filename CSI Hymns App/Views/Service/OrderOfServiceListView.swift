@@ -184,8 +184,7 @@ public struct OrderOfServiceListView: View {
             }
             .navigationTitle("ಆರಾಧನಾ ಕ್ರಮ / Liturgies")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(theme.secondaryBackgroundColor, for: .navigationBar)
-            .toolbarColorScheme(theme.colorScheme, for: .navigationBar)
+            .csiGlassNavigationBar(theme: theme)
             .onAppear {
                 startTitleAlternatingTimer()
                 Task {

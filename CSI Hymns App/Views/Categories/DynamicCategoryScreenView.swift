@@ -58,8 +58,7 @@ public struct DynamicCategoryScreenView: View {
         }
         .navigationTitle(categoryName)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(theme.secondaryBackgroundColor, for: .navigationBar)
-        .toolbarColorScheme(theme.colorScheme, for: .navigationBar)
+        .csiGlassNavigationBar(theme: theme)
         .toolbar(.hidden, for: .tabBar)
         .onAppear {
             setupInitialTab()

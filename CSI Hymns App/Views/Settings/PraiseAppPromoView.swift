@@ -30,8 +30,7 @@ public struct PraiseAppPromoView: View {
         }
         .navigationTitle("Worship Companion +")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(theme.secondaryBackgroundColor, for: .navigationBar)
-        .toolbarColorScheme(theme.colorScheme, for: .navigationBar)
+        .csiGlassNavigationBar(theme: theme)
         .toolbar(.hidden, for: .tabBar)
     }
     

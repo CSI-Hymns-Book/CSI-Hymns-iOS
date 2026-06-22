@@ -45,8 +45,7 @@ public struct CustomCategorySongsListView: View {
         }
         .navigationTitle(categoryName)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(theme.secondaryBackgroundColor, for: .navigationBar)
-        .toolbarColorScheme(theme.colorScheme, for: .navigationBar)
+        .csiGlassNavigationBar(theme: theme)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {

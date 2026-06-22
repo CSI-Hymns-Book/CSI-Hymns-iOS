@@ -106,6 +106,7 @@ public struct RootTabView: View {
             }
         }
         .id(christmasMode.isChristmasTime ? "christmas-tabs" : "normal-tabs")
+        .toolbarBackground(.automatic, for: .tabBar)
         .tint(christmasMode.isChristmasTime ? Color(hex: "B22222") : Color.blue)
         .onChange(of: christmasMode.isChristmasTime) { _, _ in
             selectedTab = 0

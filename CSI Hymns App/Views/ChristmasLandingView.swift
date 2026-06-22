@@ -89,10 +89,9 @@ public struct ChristmasLandingView: View {
                     peaceToastOverlay
                 }
             }
-            .navigationTitle("Christmas Portal")
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(theme.secondaryBackgroundColor, for: .navigationBar)
-            .toolbarColorScheme(theme.colorScheme, for: .navigationBar)
+            .csiGlassNavigationBar(theme: theme)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     NavigationLink(destination: SettingsView()) {

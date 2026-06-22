@@ -29,8 +29,7 @@ public struct RecentSongsView: View {
         }
         .navigationTitle("Recently Viewed")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(theme.secondaryBackgroundColor, for: .navigationBar)
-        .toolbarColorScheme(theme.colorScheme, for: .navigationBar)
+        .csiGlassNavigationBar(theme: theme)
         .toolbar {
             if !recentSongsList.isEmpty {
                 ToolbarItem(placement: .topBarTrailing) {

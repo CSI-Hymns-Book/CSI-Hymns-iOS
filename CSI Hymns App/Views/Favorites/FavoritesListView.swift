@@ -63,8 +63,7 @@ public struct FavoritesListView: View {
             }
             .navigationTitle("Favorites")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(theme.secondaryBackgroundColor, for: .navigationBar)
-            .toolbarColorScheme(theme.colorScheme, for: .navigationBar)
+            .csiGlassNavigationBar(theme: theme)
         }
     }
     

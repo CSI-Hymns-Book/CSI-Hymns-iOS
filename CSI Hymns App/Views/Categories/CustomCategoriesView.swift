@@ -157,8 +157,7 @@ public struct CustomCategoriesView: View {
             }
             .navigationTitle("Categories")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(theme.secondaryBackgroundColor, for: .navigationBar)
-            .toolbarColorScheme(theme.colorScheme, for: .navigationBar)
+            .csiGlassNavigationBar(theme: theme)
             .alert("Guest Limit Reached", isPresented: $viewModel.limitAlert) {
                 Button("OK", role: .cancel) {}
                 NavigationLink("Sign In") {

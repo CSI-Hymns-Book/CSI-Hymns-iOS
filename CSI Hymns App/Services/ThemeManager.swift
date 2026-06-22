@@ -243,44 +243,27 @@ public final class ThemeManager {
             style = .dark
         }
         
-        // Dynamic UIKit global configuration styling
-        let appearance = UINavigationBarAppearance()
-        if activeTheme == .amoled {
-            appearance.configureWithOpaqueBackground()
-            appearance.backgroundColor = .black
-            appearance.titleTextAttributes = [.foregroundColor: UIColor.white]
-            appearance.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
-        } else if activeTheme == .dark {
-            appearance.configureWithTransparentBackground()
-            appearance.titleTextAttributes = [.foregroundColor: UIColor.white]
-            appearance.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
-        } else {
-            appearance.configureWithOpaqueBackground()
-            appearance.backgroundColor = UIColor(red: 244/255, green: 246/255, blue: 249/255, alpha: 1)
-            appearance.titleTextAttributes = [.foregroundColor: UIColor(red: 31/255, green: 41/255, blue: 55/255, alpha: 1)]
-            appearance.largeTitleTextAttributes = [.foregroundColor: UIColor(red: 31/255, green: 41/255, blue: 55/255, alpha: 1)]
+        // Liquid Glass: use system default translucent nav/tab chrome (do not force opaque colors).
+        let navAppearance = UINavigationBarAppearance()
+        navAppearance.configureWithDefaultBackground()
+        switch activeTheme {
+        case .light:
+            navAppearance.titleTextAttributes = [.foregroundColor: UIColor(red: 31/255, green: 41/255, blue: 55/255, alpha: 1)]
+            navAppearance.largeTitleTextAttributes = [.foregroundColor: UIColor(red: 31/255, green: 41/255, blue: 55/255, alpha: 1)]
+        case .dark, .amoled:
+            navAppearance.titleTextAttributes = [.foregroundColor: UIColor.white]
+            navAppearance.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
         }
         
-        UINavigationBar.appearance().standardAppearance = appearance
-        UINavigationBar.appearance().scrollEdgeAppearance = appearance
+        UINavigationBar.appearance().standardAppearance = navAppearance
+        UINavigationBar.appearance().scrollEdgeAppearance = navAppearance
+        UINavigationBar.appearance().compactAppearance = navAppearance
         
-        // TabBar appearance dynamic updates
         let tabAppearance = UITabBarAppearance()
-        if activeTheme == .amoled {
-            tabAppearance.configureWithOpaqueBackground()
-            tabAppearance.backgroundColor = .black
-        } else if activeTheme == .light {
-            tabAppearance.configureWithOpaqueBackground()
-            tabAppearance.backgroundColor = .white
-        } else {
-            tabAppearance.configureWithDefaultBackground()
-        }
+        tabAppearance.configureWithDefaultBackground()
         UITabBar.appearance().standardAppearance = tabAppearance
-        if #available(iOS 15.0, *) {
-            UITabBar.appearance().scrollEdgeAppearance = tabAppearance
-        }
+        UITabBar.appearance().scrollEdgeAppearance = tabAppearance
         
-        // Apply override window settings on active window scenes
         DispatchQueue.main.async {
             if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
                 for window in windowScene.windows {

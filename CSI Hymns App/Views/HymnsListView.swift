@@ -308,8 +308,7 @@ public struct HymnsListView: View {
                 }
                 .navigationTitle(title)
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbarBackground(theme.secondaryBackgroundColor, for: .navigationBar)
-                .toolbarColorScheme(theme.colorScheme, for: .navigationBar)
+                .csiGlassNavigationBar(theme: theme)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         NavigationLink(destination: SettingsView()) {
@@ -407,14 +406,7 @@ public struct HymnsListView: View {
             }
         }
         .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(theme.surfaceColor)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(theme.strokeColor, lineWidth: 1)
-                )
-        )
+        .csiGlassCard(cornerRadius: 16)
     }
     
     private var filterChipsRow: some View {
@@ -520,9 +512,17 @@ public struct HymnsListView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
     
+    private func formattedSignature(_ signature: String) -> String {
+        signature
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+    }
+    
     private func hymnCell(_ hymn: Hymn) -> some View {
         NavigationLink(destination: HymnDetailView(hymn: hymn)) { // detail view
-            HStack(spacing: 16) {
+            HStack(alignment: .top, spacing: 16) {
                 // Premium hierarchical song category notation icon
                 ZStack {
                     RoundedRectangle(cornerRadius: 12)
@@ -536,16 +536,21 @@ public struct HymnsListView: View {
                         .frame(width: 32, height: 32)
                 }
                 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 8) {
                     Text("\(hymn.number): \(hymn.title)")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                         .multilineTextAlignment(.leading)
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     
                     if !hymn.signature.isEmpty {
-                        Text(hymn.signature)
+                        Text(formattedSignature(hymn.signature))
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(theme.textSecondary)
+                            .multilineTextAlignment(.leading)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 2)
                             .background(
@@ -553,24 +558,19 @@ public struct HymnsListView: View {
                             )
                     }
                 }
-                Spacer()
+                .frame(maxWidth: .infinity, alignment: .leading)
                 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(theme.textSecondary.opacity(0.7))
+                    .padding(.top, 3)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(theme.cardBackground)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(theme.cardStroke, lineWidth: 1)
-                    )
-                    .shadow(color: theme.shadowColor, radius: 4, y: 2)
-            )
+            .csiGlassCard(cornerRadius: 16)
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
-        .buttonStyle(PlainButtonStyle())
+        .buttonStyle(.plain)
     }
     
     private func jumpToMeterSheet(scrollProxy: ScrollViewProxy) -> some View {
@@ -643,12 +643,7 @@ public struct HymnsListView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
-                    .background(.ultraThinMaterial)
-                    .clipShape(Capsule())
-                    .overlay(
-                        Capsule()
-                            .stroke(theme.strokeColor.opacity(0.4), lineWidth: 1)
-                    )
+                    .csiGlassCard(cornerRadius: 999)
                     .shadow(color: Color.black.opacity(0.15), radius: 8, y: 4)
                     .padding(.top, 16)
                     

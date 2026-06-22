@@ -88,8 +88,7 @@ public struct CustomCategoryDesignerView: View {
             }
             .navigationTitle("Add Songs")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(theme.secondaryBackgroundColor, for: .navigationBar)
-            .toolbarColorScheme(theme.colorScheme, for: .navigationBar)
+            .csiGlassNavigationBar(theme: theme)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") {

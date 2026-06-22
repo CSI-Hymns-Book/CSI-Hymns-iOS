@@ -125,8 +125,7 @@ public struct HymnDetailView: View {
         }
         .navigationTitle("\(hymn.type == "keerthane" ? "Keerthane" : "Hymn") \(hymn.number)")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(theme.secondaryBackgroundColor, for: .navigationBar)
-        .toolbarColorScheme(theme.colorScheme, for: .navigationBar)
+        .csiGlassNavigationBar(theme: theme)
         // Immersive reading navbar auto-hide behavior
         .toolbar(.hidden, for: .tabBar)
         .toolbar {
