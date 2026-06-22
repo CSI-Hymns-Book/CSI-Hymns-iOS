@@ -6,13 +6,31 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		F58F5A412FB9AE3100861475 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = F58F5A402FB9AE3100861475 /* Supabase */; };
+		F58F5A512FB9AE3100861475 /* OneSignalFramework in Frameworks */ = {isa = PBXBuildFile; productRef = F58F5A502FB9AE3100861475 /* OneSignalFramework */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		F58F59952FB9AA2800861475 /* CSI Hymns App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "CSI Hymns App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		F58F5A602FB9AE3100861475 /* Exceptions for "CSI Hymns App" folder in "CSI Hymns App" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = F58F59942FB9AA2800861475 /* CSI Hymns App */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		F58F59972FB9AA2800861475 /* CSI Hymns App */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				F58F5A602FB9AE3100861475 /* Exceptions for "CSI Hymns App" folder in "CSI Hymns App" target */,
+			);
 			path = "CSI Hymns App";
 			sourceTree = "<group>";
 		};
@@ -23,6 +41,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F58F5A412FB9AE3100861475 /* Supabase in Frameworks */,
+				F58F5A512FB9AE3100861475 /* OneSignalFramework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +85,8 @@
 			);
 			name = "CSI Hymns App";
 			packageProductDependencies = (
+				F58F5A402FB9AE3100861475 /* Supabase */,
+				F58F5A502FB9AE3100861475 /* OneSignalFramework */,
 			);
 			productName = "CSI Hymns App";
 			productReference = F58F59952FB9AA2800861475 /* CSI Hymns App.app */;
@@ -82,6 +104,11 @@
 				TargetAttributes = {
 					F58F59942FB9AA2800861475 = {
 						CreatedOnToolsVersion = 26.0.1;
+						SystemCapabilities = {
+							com.apple.SignInWithApple = {
+								enabled = 1;
+							};
+						};
 					};
 				};
 			};
@@ -94,6 +121,10 @@
 			);
 			mainGroup = F58F598C2FB9AA2800861475;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				F58F5A3F2FB9AE3000861475 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+				F58F5A4F2FB9AE3000861475 /* XCRemoteSwiftPackageReference "OneSignal-iOS-SDK" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = F58F59962FB9AA2800861475 /* Products */;
 			projectDirPath = "";
@@ -181,7 +212,7 @@
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
-				ONLY_ACTIVE_ARCH = YES;
+				ONLY_ACTIVE_ARCH = NO;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -246,14 +277,18 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "CSI Hymns App/CSI Hymns App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_TEAM = 6854RXDB8K;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "CSI Hymns App/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "CSI Hymns Book";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.books";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -268,8 +303,8 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.reyzie.hymns.CSI-Hymns-App";
+				MARKETING_VERSION = 4.2.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.reyzie.hymns;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
@@ -290,14 +325,19 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "CSI Hymns App/CSI Hymns App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_TEAM = 6854RXDB8K;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "CSI Hymns App/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "CSI Hymns Book";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.books";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -312,8 +352,8 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.reyzie.hymns.CSI-Hymns-App";
+				MARKETING_VERSION = 4.2.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.reyzie.hymns;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
@@ -351,6 +391,38 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		F58F5A3F2FB9AE3000861475 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase-community/supabase-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.5.1;
+			};
+		};
+		F58F5A4F2FB9AE3000861475 /* XCRemoteSwiftPackageReference "OneSignal-iOS-SDK" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/OneSignal/OneSignal-iOS-SDK";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		F58F5A402FB9AE3100861475 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F58F5A3F2FB9AE3000861475 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+		F58F5A502FB9AE3100861475 /* OneSignalFramework */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F58F5A4F2FB9AE3000861475 /* XCRemoteSwiftPackageReference "OneSignal-iOS-SDK" */;
+			productName = OneSignalFramework;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = F58F598D2FB9AA2800861475 /* Project object */;
 }

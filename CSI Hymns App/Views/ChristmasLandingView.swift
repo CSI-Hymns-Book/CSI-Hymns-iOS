@@ -1,101 +1,35 @@
 import SwiftUI
 
-/// Physics state details for a single snowflake.
-struct SnowflakeParticle: Identifiable, Sendable {
-    let id = UUID()
-    var x: Double      // Normalized x coordinate (0.0 to 1.0)
-    var y: Double      // Normalized y coordinate (0.0 to 1.0)
-    let size: Double
-    let speed: Double
-    let drift: Double
-    let opacity: Double
-}
-
-/// Dynamic canvas driver painting falling snowflakes at ProMotion refresh rates (up to 120 Hz).
-struct SnowflakeCanvasView: View {
-    @State private var particles: [SnowflakeParticle] = []
-    
-    init() {}
-    
-    var body: some View {
-        TimelineView(.animation) { timeline in
-            Canvas { context, size in
-                if particles.isEmpty {
-                    generateParticles()
-                }
-                
-                // Advance physics coordinates and draw
-                for idx in 0..<particles.count {
-                    let time = timeline.date.timeIntervalSinceReferenceDate
-                    
-                    // Vertical progression
-                    var yPos = particles[idx].y + (particles[idx].speed * 0.005)
-                    if yPos > 1.0 { yPos = 0.0 }
-                    
-                    // Side drift oscillations
-                    let xOsc = sin(time + Double(idx)) * particles[idx].drift
-                    var xPos = particles[idx].x + xOsc
-                    if xPos > 1.0 { xPos = 0.0 } else if xPos < 0.0 { xPos = 1.0 }
-                    
-                    particles[idx].y = yPos
-                    particles[idx].x = xPos
-                    
-                    let drawX = xPos * size.width
-                    let drawY = yPos * size.height
-                    
-                    var path = Path()
-                    path.addEllipse(in: CGRect(
-                        x: drawX,
-                        y: drawY,
-                        width: particles[idx].size,
-                        height: particles[idx].size
-                    ))
-                    
-                    context.opacity = particles[idx].opacity
-                    context.fill(path, with: .color(.white))
-                }
-            }
-        }
-    }
-    
-    private func generateParticles() {
-        var newParticles = [SnowflakeParticle]()
-        for _ in 0..<60 {
-            newParticles.append(SnowflakeParticle(
-                x: Double.random(in: 0...1),
-                y: Double.random(in: 0...1),
-                size: Double.random(in: 2...5),
-                speed: Double.random(in: 0.15...0.45),
-                drift: Double.random(in: 0.002...0.006),
-                opacity: Double.random(in: 0.3...0.8)
-            ))
-        }
-        self.particles = newParticles
-    }
-}
-
 /// A spectacular Liquid Glass landing portal active during festive seasons.
 public struct ChristmasLandingView: View {
+    @Binding var selectedTab: Int
+    @State private var theme = ThemeManager.shared
     @State private var isShowingToast = false
     @State private var toastOffset: CGFloat = 100.0
     @State private var toastOpacity: Double = 0.0
     
-    public init() {}
+    public init(selectedTab: Binding<Int>) {
+        self._selectedTab = selectedTab
+    }
     
     public var body: some View {
         NavigationStack {
             ZStack {
-                // Dark mystical Christmas night sky
-                LinearGradient(
-                    colors: [Color(hex: "0D1B2A"), Color(hex: "132237"), Color(hex: "0D1B2A")],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
-                
-                // ProMotion snowflake particle canvas
-                SnowflakeCanvasView()
+                // Adaptive theme backgrounds
+                theme.backgroundColor
                     .ignoresSafeArea()
+                
+                if theme.activeTheme != .amoled {
+                    // Dark mystical Christmas night sky overlay
+                    LinearGradient(
+                        colors: [Color(hex: "0D1B2A"), Color(hex: "132237"), Color(hex: "0D1B2A")],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .ignoresSafeArea()
+                }
+                
+                // ProMotion snowflake particle canvas handled app-wide via FestiveSnowfallOverlay
                 
                 ScrollView {
                     VStack(spacing: 20) {
@@ -105,7 +39,7 @@ public struct ChristmasLandingView: View {
                         
                         // Large Categories navigation cards
                         VStack(spacing: 16) {
-                            NavigationLink(destination: HymnsListView(title: "Hymns", isKeerthanes: false)) {
+                            NavigationLink(destination: HymnsListView(title: "Hymns", isKeerthanes: false, selectedTab: $selectedTab)) {
                                 CategoryGlassCard(
                                     title: "Hymns",
                                     subtitle: "Traditional hymns from the CSI hymn book",
@@ -114,9 +48,9 @@ public struct ChristmasLandingView: View {
                                     isHighlighted: false
                                 )
                             }
-                            .buttonStyle(PlainButtonStyle())
+                            .buttonStyle(CategoryCardButtonStyle())
                             
-                            NavigationLink(destination: HymnsListView(title: "Keerthanes", isKeerthanes: true)) {
+                            NavigationLink(destination: HymnsListView(title: "Keerthanes", isKeerthanes: true, selectedTab: $selectedTab)) {
                                 CategoryGlassCard(
                                     title: "Keerthane",
                                     subtitle: "Kannada devotional songs and lyrics",
@@ -125,7 +59,7 @@ public struct ChristmasLandingView: View {
                                     isHighlighted: false
                                 )
                             }
-                            .buttonStyle(PlainButtonStyle())
+                            .buttonStyle(CategoryCardButtonStyle())
                             
                             NavigationLink(destination: ChristmasCarolsListView()) {
                                 CategoryGlassCard(
@@ -136,7 +70,7 @@ public struct ChristmasLandingView: View {
                                     isHighlighted: true
                                 )
                             }
-                            .buttonStyle(PlainButtonStyle())
+                            .buttonStyle(CategoryCardButtonStyle())
                         }
                         
                         // Easter egg footer
@@ -146,6 +80,9 @@ public struct ChristmasLandingView: View {
                     }
                     .padding(.horizontal)
                 }
+                .scrollContentBackground(.hidden)
+                .contentShape(Rectangle())
+                .swipeToNavigate(selectedTab: $selectedTab, maxTab: 3)
                 
                 // Toast alert overlay
                 if isShowingToast {
@@ -154,6 +91,8 @@ public struct ChristmasLandingView: View {
             }
             .navigationTitle("Christmas Portal")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(theme.secondaryBackgroundColor, for: .navigationBar)
+            .toolbarColorScheme(theme.colorScheme, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     NavigationLink(destination: SettingsView()) {
@@ -274,8 +213,6 @@ struct CategoryGlassCard: View {
     let gradients: [Color]
     let isHighlighted: Bool
     
-    @State private var scale: CGFloat = 1.0
-    
     var body: some View {
         HStack(spacing: 16) {
             // Emoji plate
@@ -324,19 +261,14 @@ struct CategoryGlassCard: View {
                 .fill(LinearGradient(colors: gradients, startPoint: .topLeading, endPoint: .bottomTrailing))
                 .shadow(color: (gradients.first ?? .clear).opacity(0.4), radius: isHighlighted ? 12 : 6, x: 0, y: 4)
         )
-        .scaleEffect(scale)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    withAnimation(.spring(response: 0.15, dampingFraction: 0.6)) {
-                        scale = 0.95
-                    }
-                }
-                .onEnded { _ in
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) {
-                        scale = 1.0
-                    }
-                }
-        )
+    }
+}
+
+/// Press-scale style for NavigationLink cards without stealing tap gestures.
+private struct CategoryCardButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }

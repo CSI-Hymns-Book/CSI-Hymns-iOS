@@ -4,11 +4,33 @@ import SwiftUI
 public struct CarolDetailView: View {
     let carol: ChristmasCarol
     
+    @AppStorage("use_page_swipe_physics") private var usePageSwipe = true
     @State private var selectedLanguage: String = "Kannada" // Kannada or English
     @State private var fontSize: CGFloat = 18.0
+    @State private var isShowingPDF = false
     
     public init(carol: ChristmasCarol) {
         self.carol = carol
+    }
+    
+    /// Dynamically parses combined bilingual lyrics if English translation exists.
+    private var parsedLyrics: (kannada: String, english: String?) {
+        let components = carol.lyrics.components(separatedBy: "\n\n---\n\nEnglish Translation:\n")
+        if components.count > 1 {
+            return (components[0], components[1])
+        }
+        
+        let altComponents = carol.lyrics.components(separatedBy: "\n\n---\n\nEnglish:\n")
+        if altComponents.count > 1 {
+            return (altComponents[0], altComponents[1])
+        }
+        
+        let genericComponents = carol.lyrics.components(separatedBy: "\n\n---\n\n")
+        if genericComponents.count > 1 {
+            return (genericComponents[0], genericComponents[1])
+        }
+        
+        return (carol.lyrics, nil)
     }
     
     public var body: some View {
@@ -31,12 +53,54 @@ public struct CarolDetailView: View {
                     .background(Color.white.opacity(0.12))
                     .padding(.vertical, 12)
                 
-                // Lyrics Swiper
-                lyricsSwipeContainer
+                if carol.hasPdf {
+                    viewPDFButton
+                        .padding(.horizontal)
+                        .padding(.bottom, 12)
+                }
+                
+                // Lyrics Scroll Container (continuous uninterrupted reading)
+                continuousLyricsContainer
             }
         }
         .navigationTitle(carol.title)
         .navigationBarTitleDisplayMode(.inline)
+        .textSelection(.disabled)
+        .toolbar(.hidden, for: .tabBar)
+        .sheet(isPresented: $isShowingPDF) {
+            if let url = carol.pdfUrl {
+                NavigationStack {
+                    PDFDocumentReaderView(documentUrlString: url, documentTitle: carol.title)
+                        .toolbar {
+                            ToolbarItem(placement: .topBarLeading) {
+                                Button("Done") { isShowingPDF = false }
+                                    .foregroundColor(.white)
+                            }
+                        }
+                }
+            }
+        }
+    }
+    
+    private var viewPDFButton: some View {
+        Button {
+            isShowingPDF = true
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "doc.richtext.fill")
+                Text("View Sheet Music (PDF)")
+                    .font(.system(size: 15, weight: .bold))
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+            }
+            .foregroundColor(.white)
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(ChristmasColors.christmasRed.opacity(0.85))
+            )
+        }
     }
     
     // MARK: - Subviews
@@ -74,7 +138,7 @@ public struct CarolDetailView: View {
             Spacer()
             
             // Language selector if English translation is available
-            if carol.lyricsEnglish != nil {
+            if parsedLyrics.english != nil {
                 HStack(spacing: 6) {
                     ForEach(["Kannada", "English"], id: \.self) { lang in
                         Button {
@@ -99,24 +163,40 @@ public struct CarolDetailView: View {
         }
     }
     
-    private var lyricsSwipeContainer: some View {
-        let text = selectedLanguage == "Kannada" ? carol.lyrics : (carol.lyricsEnglish ?? carol.lyrics)
-        let paragraphs = text.components(separatedBy: "\n\n").filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    /// Lyrics reader: page-flip when enabled in Settings, otherwise continuous scroll.
+    @ViewBuilder
+    private var continuousLyricsContainer: some View {
+        let text = selectedLanguage == "Kannada" ? parsedLyrics.kannada : (parsedLyrics.english ?? parsedLyrics.kannada)
+        if usePageSwipe {
+            PageFlipLyricsView(
+                lyrics: text,
+                fontSize: fontSize,
+                textColor: .white,
+                accent: ChristmasColors.christmasGold
+            )
+        } else {
+            scrollLyricsContainer(text: text)
+        }
+    }
+    
+    private func scrollLyricsContainer(text: String) -> some View {
+        let paragraphs = text.components(separatedBy: "\n\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
         
-        return TabView {
-            ForEach(0..<paragraphs.count, id: \.self) { index in
-                ScrollView {
+        return ScrollView {
+            LazyVStack(spacing: 24) {
+                ForEach(0..<paragraphs.count, id: \.self) { index in
                     Text(paragraphs[index])
-                        .font(.system(size: fontSize, weight: .medium))
-                        .lineSpacing(8)
+                        .font(.system(size: fontSize, weight: .semibold))
+                        .lineSpacing(fontSize * 0.35)
                         .foregroundColor(.white)
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 36)
                         .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 28)
                 }
             }
+            .padding(.vertical, 20)
         }
-        .tabViewStyle(PageTabViewStyle(indexDisplayMode: .always))
     }
 }

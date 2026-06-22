@@ -1,24 +1,27 @@
 import SwiftUI
 import Observation
 
-/// View model managing locally bookmarked songs and synchronizing with SupabaseService.
-@Observable
-public final class FavoritesListViewModel {
-    public var searchQuery = ""
-    public var selectedCategory = 0 // 0 = Hymns, 1 = Keerthanes
-    public var isLoading = false
+/// A premium, glassmorphic Favorites Manager screen supporting all app themes.
+public struct FavoritesListView: View {
+    @Binding var selectedTab: Int
+    @State private var theme = ThemeManager.shared
+    @State private var favoritesManager = FavoritesManager.shared
+    @State private var searchQuery = ""
+    @State private var selectedCategory = 0 // 0 = Hymns, 1 = Keerthanes
     
-    // In production, this binds directly to SupabaseService favorites caches
-    public var favoriteHymns: [Hymn] = []
-    public var favoriteKeerthanes: [Hymn] = []
-    
-    public init() {
-        loadMockFavorites()
+    private var maxTab: Int {
+        ChristmasModeService.shared.isChristmasTime ? 3 : 4
     }
     
-    public var filteredFavorites: [Hymn] {
+    public init(selectedTab: Binding<Int>) {
+        self._selectedTab = selectedTab
+    }
+    
+    /// Filters favorites based on the active tab selection and query
+    private var filteredFavorites: [Hymn] {
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let source = selectedCategory == 0 ? favoriteHymns : favoriteKeerthanes
+        let targetType = selectedCategory == 0 ? "hymn" : "keerthane"
+        let source = favoritesManager.favorites.filter { $0.type == targetType }
         
         if query.isEmpty {
             return source
@@ -30,61 +33,28 @@ public final class FavoritesListViewModel {
         }
     }
     
-    public func removeFavorite(_ hymn: Hymn) {
-        let generator = UIImpactFeedbackGenerator(style: .medium)
-        generator.impactOccurred()
-        
-        if selectedCategory == 0 {
-            favoriteHymns.removeAll { $0.id == hymn.id }
-        } else {
-            favoriteKeerthanes.removeAll { $0.id == hymn.id }
-        }
-    }
-    
-    private func loadMockFavorites() {
-        isLoading = true
-        // Mock favorites data for immediate UI rendering and compiler safety
-        favoriteHymns = [
-            Hymn(number: 25, title: "ಯೇಸುವೇ ನಿನ್ನ ಒಲವು ದೊಡ್ಡದು", signature: "L.M", lyricsKannada: "1. ಯೇಸುವೇ...", lyricsEnglish: "1. Jesus Thy Love..."),
-            Hymn(number: 304, title: "ಕ್ರಿಸ್ತನೆ ಜಯಶಾಲಿ", signature: "C.M", lyricsKannada: "1. ಕ್ರಿಸ್ತನೆ ಜಯ...", lyricsEnglish: "1. Christ the Victor...")
-        ]
-        favoriteKeerthanes = [
-            Hymn(number: 10, title: "ದೇವಕುಮಾರನೇ ಧನ್ಯಾವಾದಗಳು", signature: "6.7.7.7", lyricsKannada: "1. ದೇವಕುಮಾರನೇ...", lyricsEnglish: "1. Son of God...")
-        ]
-        isLoading = false
-    }
-}
-
-/// A premium, glassmorphic favorites manager screen.
-public struct FavoritesListView: View {
-    @State private var viewModel = FavoritesListViewModel()
-    
-    public init() {}
-    
     public var body: some View {
         NavigationStack {
             ZStack {
-                // Glass deep blue background
-                LinearGradient(
-                    colors: [Color(hex: "0D1B2A"), Color(hex: "1B263B")],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
+                // Adaptive theme background
+                theme.backgroundColor
+                    .ignoresSafeArea()
+                
+                if theme.activeTheme != .amoled {
+                    theme.backgroundGradient
+                        .ignoresSafeArea()
+                }
                 
                 VStack(spacing: 16) {
-                    // Glass Category Picker
+                    // Glass Category Picker Segment
                     pickerSegmentControl
                     
-                    // Glass Search Bar
+                    // Themed Search Bar
                     customSearchBar
                     
-                    if viewModel.isLoading {
-                        ProgressView()
-                            .tint(.white)
-                            .frame(maxHeight: .infinity)
-                    } else if viewModel.filteredFavorites.isEmpty {
+                    if filteredFavorites.isEmpty {
                         emptyStateView
+                            .transition(.opacity)
                     } else {
                         favoritesScrollView
                     }
@@ -93,6 +63,8 @@ public struct FavoritesListView: View {
             }
             .navigationTitle("Favorites")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(theme.secondaryBackgroundColor, for: .navigationBar)
+            .toolbarColorScheme(theme.colorScheme, for: .navigationBar)
         }
     }
     
@@ -104,26 +76,26 @@ public struct FavoritesListView: View {
             pickerButton(title: "Keerthanes", index: 1)
         }
         .padding(4)
-        .background(Color.white.opacity(0.06))
+        .background(theme.surfaceColor)
         .cornerRadius(12)
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.12), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(theme.strokeColor, lineWidth: 1))
         .padding(.top, 8)
     }
     
     private func pickerButton(title: String, index: Int) -> some View {
         Button {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                viewModel.selectedCategory = index
+                selectedCategory = index
             }
         } label: {
             Text(title)
                 .font(.system(size: 14, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundColor(theme.textPrimary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(viewModel.selectedCategory == index ? Color.white.opacity(0.16) : Color.clear)
+                        .fill(selectedCategory == index ? theme.textPrimary.opacity(0.12) : Color.clear)
                 )
         }
     }
@@ -131,108 +103,129 @@ public struct FavoritesListView: View {
     private var customSearchBar: some View {
         HStack {
             Image(systemName: "magnifyingglass")
-                .foregroundColor(.white.opacity(0.6))
+                .foregroundColor(theme.textSecondary)
             
-            TextField("Search bookmarks...", text: $viewModel.searchQuery)
-                .foregroundColor(.white)
-                .accentColor(.white)
+            TextField("Search bookmarks...", text: $searchQuery)
+                .foregroundColor(theme.textPrimary)
+                .accentColor(theme.textPrimary)
+                .keyboardType(.default)
             
-            if !viewModel.searchQuery.isEmpty {
+            if !searchQuery.isEmpty {
                 Button {
-                    viewModel.searchQuery = ""
+                    searchQuery = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.white.opacity(0.6))
+                        .foregroundColor(theme.textSecondary)
                 }
             }
         }
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white.opacity(0.08))
+                .fill(theme.surfaceColor)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                        .stroke(theme.strokeColor, lineWidth: 1)
                 )
         )
     }
     
     private var emptyStateView: some View {
         VStack(spacing: 16) {
-            Image(systemName: "bookmark.slash")
-                .font(.system(size: 48))
-                .foregroundColor(.white.opacity(0.3))
+            Image(systemName: "heart.slash.fill")
+                .font(.system(size: 54))
+                .foregroundColor(theme.textSecondary.opacity(0.35))
             
-            Text(viewModel.searchQuery.isEmpty ? "No Favorites Yet" : "No Matching Favorites")
+            Text(searchQuery.isEmpty ? "No Favorites Yet" : "No Matching Favorites")
                 .font(.system(size: 18, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundColor(theme.textPrimary)
             
-            Text(viewModel.searchQuery.isEmpty
-                 ? "Tap the bookmark icon on any song lyric page to save them for offline access."
+            Text(searchQuery.isEmpty
+                 ? "Tap the heart icon on any song lyric page to save them for offline access."
                  : "Try refining your search text to match your saved bookmarks.")
                 .font(.system(size: 13))
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 30)
         }
         .frame(maxHeight: .infinity)
+        // Enable swiping to other tabs on empty state screen
+        .contentShape(Rectangle())
+        .swipeToNavigate(selectedTab: $selectedTab, maxTab: maxTab)
     }
     
     private var favoritesScrollView: some View {
         ScrollView {
             LazyVStack(spacing: 12) {
-                ForEach(viewModel.filteredFavorites) { song in
-                    favoriteSongCell(song)
+                ForEach(filteredFavorites) { song in
+                    NavigationLink(destination: HymnDetailView(hymn: song)) {
+                        favoriteSongCell(song)
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
             }
             .padding(.top, 4)
             .padding(.bottom, 24)
         }
+        // Enable swiping to other tabs on list view scroll
+        .swipeToNavigate(selectedTab: $selectedTab, maxTab: maxTab)
     }
     
     private func favoriteSongCell(_ song: Hymn) -> some View {
         HStack(spacing: 16) {
+            // Premium hierarchical song category notation icon
             ZStack {
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.white.opacity(0.12))
-                    .frame(width: 42, height: 42)
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.18), lineWidth: 1))
+                    .fill(theme.accentColor.opacity(0.12))
+                    .frame(width: 44, height: 44)
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(theme.accentColor.opacity(0.25), lineWidth: 1))
                 
-                Text("🎵")
-                    .font(.system(size: 18))
+                Image(song.type == "keerthane" ? "keerthane" : "hymn")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 30, height: 30)
             }
             
             VStack(alignment: .leading, spacing: 4) {
                 Text("\(song.number): \(song.title)")
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(theme.textPrimary)
                 
                 if !song.signature.isEmpty {
                     Text(song.signature)
                         .font(.system(size: 11))
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(theme.textSecondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule().fill(theme.surfaceColor)
+                        )
                 }
             }
             
             Spacer()
             
+            // Scaled favorite hearts
             Button {
-                viewModel.removeFavorite(song)
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) {
+                    favoritesManager.toggleFavorite(song: song)
+                }
             } label: {
-                Image(systemName: "bookmark.fill")
-                    .foregroundColor(.blue)
-                    .font(.system(size: 18))
+                Image(systemName: "heart.fill")
+                    .foregroundColor(.red)
+                    .font(.system(size: 20))
             }
             .buttonStyle(PlainButtonStyle())
         }
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(Color.white.opacity(0.05))
+                .fill(theme.cardBackground)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                        .stroke(theme.cardStroke, lineWidth: 1)
                 )
+                .shadow(color: theme.shadowColor, radius: 4, y: 2)
         )
     }
 }

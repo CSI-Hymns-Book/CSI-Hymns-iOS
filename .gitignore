@@ -1,0 +1,17 @@
+# Secrets
+CSI Hymns App/Secrets.plist
+
+# Xcode user-specific
+xcuserdata/
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+
+# macOS
+.DS_Store
+
+# Build artifacts
+DerivedData/
+build/
+*.ipa
+*.dSYM.zip

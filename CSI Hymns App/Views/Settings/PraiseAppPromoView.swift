@@ -3,18 +3,20 @@ import SwiftUI
 /// A premium, App Store-styled promotion screen for the related "Praise App" devotions suite.
 public struct PraiseAppPromoView: View {
     @Environment(\.openURL) private var openURL
+    @State private var theme = ThemeManager.shared
     
     public init() {}
     
     public var body: some View {
         ZStack {
-            // Dark royal purple background gradient
-            LinearGradient(
-                colors: [Color(hex: "0D1B2A"), Color(hex: "1F1235"), Color(hex: "0D1B2A")],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            // Adaptive theme background
+            theme.backgroundColor
+                .ignoresSafeArea()
+            
+            if theme.activeTheme != .amoled {
+                theme.backgroundGradient
+                    .ignoresSafeArea()
+            }
             
             ScrollView {
                 VStack(spacing: 28) {
@@ -32,30 +34,34 @@ public struct PraiseAppPromoView: View {
         }
         .navigationTitle("Related Devotions")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(theme.secondaryBackgroundColor, for: .navigationBar)
+        .toolbarColorScheme(theme.colorScheme, for: .navigationBar)
+        .toolbar(.hidden, for: .tabBar)
     }
     
     // MARK: - Subviews
     
     private var appPromoHeroCard: some View {
         VStack(spacing: 16) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 24)
-                    .fill(LinearGradient(colors: [Color(hex: "9C27B0"), Color(hex: "E040FB")], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(width: 96, height: 96)
-                    .shadow(color: Color(hex: "9C27B0").opacity(0.45), radius: 14, x: 0, y: 6)
-                
-                Text("🕊️")
-                    .font(.system(size: 48))
-            }
+            Image("praise_logo")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 96, height: 96)
+                .cornerRadius(22)
+                .shadow(color: Color.black.opacity(0.15), radius: 12, x: 0, y: 6)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22)
+                        .stroke(theme.strokeColor, lineWidth: 1)
+                )
             
             VStack(spacing: 6) {
                 Text("Praise App")
                     .font(.system(size: 24, weight: .black))
-                    .foregroundColor(.white)
+                    .foregroundColor(theme.textPrimary)
                 
                 Text("The Ultimate Companion Devotions Suite")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(.white.opacity(0.65))
+                    .foregroundColor(theme.textSecondary)
             }
         }
         .padding(.top, 16)
@@ -65,7 +71,7 @@ public struct PraiseAppPromoView: View {
         VStack(alignment: .leading, spacing: 18) {
             Text("Why Download Praise App?")
                 .font(.system(size: 16, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundColor(theme.textPrimary)
                 .padding(.horizontal, 4)
             
             VStack(spacing: 14) {
@@ -83,7 +89,7 @@ public struct PraiseAppPromoView: View {
                 
                 featureItemRow(
                     title: "Full audio accompaniments",
-                    description: "Vibrant high-quality instrumentals suitable for congregational play.",
+                    description: "Universal accompaniment tracks and instrumentals suitable for congregational play.",
                     emoji: "🎹"
                 )
             }
@@ -94,7 +100,7 @@ public struct PraiseAppPromoView: View {
         HStack(alignment: .top, spacing: 16) {
             ZStack {
                 Circle()
-                    .fill(Color.white.opacity(0.08))
+                    .fill(theme.surfaceColor)
                     .frame(width: 38, height: 38)
                 
                 Text(emoji)
@@ -104,19 +110,19 @@ public struct PraiseAppPromoView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(theme.textPrimary)
                 
                 Text(description)
                     .font(.system(size: 12))
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundColor(theme.textSecondary)
                     .lineSpacing(4)
             }
             Spacer()
         }
         .padding(14)
-        .background(Color.white.opacity(0.04))
+        .background(theme.cardBackground)
         .cornerRadius(16)
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.08), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(theme.cardStroke, lineWidth: 1))
     }
     
     private var downloadStoreButton: some View {
@@ -133,12 +139,12 @@ public struct PraiseAppPromoView: View {
                 Text("Download on App Store")
                     .font(.system(size: 15, weight: .bold))
             }
-            .foregroundColor(.black)
+            .foregroundColor(theme.selectedAccent.textPairing)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
-            .background(Color.white)
+            .background(theme.accentColor)
             .cornerRadius(12)
-            .shadow(color: Color.white.opacity(0.12), radius: 10, y: 5)
+            .shadow(color: theme.accentColor.opacity(0.3), radius: 8, y: 4)
         }
         .padding(.top, 12)
     }

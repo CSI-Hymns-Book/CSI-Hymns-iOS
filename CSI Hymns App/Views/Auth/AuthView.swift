@@ -11,6 +11,7 @@ public final class AuthViewModel {
     public var acceptPrivacy = false
     public var isLoading = false
     public var errorMessage: String? = nil
+    public var resetEmailSent = false
     
     public init() {}
     
@@ -19,8 +20,8 @@ public final class AuthViewModel {
         guard password.count >= 6 else { return false }
         if isSignUp {
             guard !fullName.isEmpty else { return false }
+            guard acceptPrivacy else { return false }
         }
-        guard acceptPrivacy else { return false }
         return true
     }
     
@@ -37,13 +38,40 @@ public final class AuthViewModel {
             } else {
                 try await svc.signIn(email: email, password: password)
             }
+            await svc.syncPrivacyPolicyFromLocalPrefs()
             isLoading = false
             return true
         } catch {
             isLoading = false
+            let nsError = error as NSError
             errorMessage = error.localizedDescription
+            
             let generator = UINotificationFeedbackGenerator()
-            generator.notificationOccurred(.error)
+            if nsError.domain == "SupabaseService" && nsError.code == 201 {
+                generator.notificationOccurred(.success)
+            } else {
+                generator.notificationOccurred(.error)
+            }
+            return false
+        }
+    }
+    
+    public func sendPasswordReset() async -> Bool {
+        guard email.contains("@") else {
+            errorMessage = "Enter your email address first."
+            return false
+        }
+        isLoading = true
+        errorMessage = nil
+        do {
+            try await SupabaseService.instance.sendPasswordResetEmail(email)
+            resetEmailSent = true
+            errorMessage = "Password reset email sent. Check your inbox."
+            isLoading = false
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            isLoading = false
             return false
         }
     }
@@ -114,17 +142,18 @@ public struct AuthView: View {
     private var formCard: some View {
         VStack(spacing: 18) {
             if let error = viewModel.errorMessage {
+                let isSuccess = error.contains("successful") || error.contains("successful!") || error.contains("Confirmation")
                 HStack(spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(Color(hex: "F44336"))
+                    Image(systemName: isSuccess ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                        .foregroundColor(isSuccess ? Color.green : Color(hex: "F44336"))
                     Text(error)
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(Color(hex: "F44336"))
-                        .lineLimit(2)
+                        .foregroundColor(isSuccess ? Color.green : Color(hex: "F44336"))
+                        .lineLimit(4)
                 }
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(hex: "F44336").opacity(0.12))
+                .background((isSuccess ? Color.green : Color(hex: "F44336")).opacity(0.12))
                 .cornerRadius(12)
                 .transition(.opacity)
             }
@@ -154,8 +183,10 @@ public struct AuthView: View {
                 systemImage: "lock"
             )
             
-            // Privacy Agreement Checkbox
-            privacyAgreementRow
+            // Privacy Agreement Checkbox (Sign Up Only)
+            if viewModel.isSignUp {
+                privacyAgreementRow
+            }
             
             // Submit Button
             Button {
@@ -164,6 +195,12 @@ public struct AuthView: View {
                 
                 Task {
                     if await viewModel.authenticate() {
+                        Task {
+                            await FavoritesManager.shared.syncWithRemote()
+                            await CustomCategoriesViewModel.syncAfterSignIn()
+                            await SupabaseService.instance.syncPrivacyPolicyFromLocalPrefs()
+                            await ChristmasCarolsService.shared.syncAfterSignIn()
+                        }
                         dismiss()
                     }
                 }
@@ -184,6 +221,17 @@ public struct AuthView: View {
                 .cornerRadius(14)
             }
             .disabled(!viewModel.isFormValid || viewModel.isLoading)
+            
+            if !viewModel.isSignUp {
+                Button {
+                    Task { _ = await viewModel.sendPasswordReset() }
+                } label: {
+                    Text("Forgot password?")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.75))
+                }
+                .disabled(viewModel.isLoading || viewModel.email.isEmpty)
+            }
             
             // Toggle form state button
             Button {
@@ -251,7 +299,32 @@ public struct AuthView: View {
         VStack(spacing: 12) {
             // Apple OAuth
             Button {
-                // Implement Sign in with Apple native triggers
+                let impact = UIImpactFeedbackGenerator(style: .medium)
+                impact.impactOccurred()
+                
+                Task {
+                    viewModel.isLoading = true
+                    viewModel.errorMessage = nil
+                    do {
+                        try await SupabaseService.instance.signInWithAppleNative()
+                        await FavoritesManager.shared.syncWithRemote()
+                        await CustomCategoriesViewModel.syncAfterSignIn()
+                        await SupabaseService.instance.syncPrivacyPolicyFromLocalPrefs()
+                        await ChristmasCarolsService.shared.syncAfterSignIn()
+                        await SupabaseService.instance.refreshDisplayName()
+                        viewModel.isLoading = false
+                        dismiss()
+                    } catch {
+                        viewModel.isLoading = false
+                        // Don't show cancel error message if user dismissed sheets
+                        let errStr = error.localizedDescription
+                        if !errStr.contains("canceled") && !errStr.contains("cancelled") {
+                            viewModel.errorMessage = errStr
+                            let generator = UINotificationFeedbackGenerator()
+                            generator.notificationOccurred(.error)
+                        }
+                    }
+                }
             } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "apple.logo")
@@ -265,10 +338,35 @@ public struct AuthView: View {
                 .background(Color.white)
                 .cornerRadius(12)
             }
+            .disabled(viewModel.isLoading)
             
             // Google OAuth
             Button {
-                // Implement Google OAuth native triggers
+                let impact = UIImpactFeedbackGenerator(style: .medium)
+                impact.impactOccurred()
+                
+                Task {
+                    viewModel.isLoading = true
+                    viewModel.errorMessage = nil
+                    do {
+                        try await SupabaseService.instance.signInWithProvider("google")
+                        await FavoritesManager.shared.syncWithRemote()
+                        await CustomCategoriesViewModel.syncAfterSignIn()
+                        await SupabaseService.instance.syncPrivacyPolicyFromLocalPrefs()
+                        await ChristmasCarolsService.shared.syncAfterSignIn()
+                        await SupabaseService.instance.refreshDisplayName()
+                        viewModel.isLoading = false
+                        dismiss()
+                    } catch {
+                        viewModel.isLoading = false
+                        let errStr = error.localizedDescription
+                        if !errStr.contains("canceled") && !errStr.contains("cancelled") {
+                            viewModel.errorMessage = errStr
+                            let generator = UINotificationFeedbackGenerator()
+                            generator.notificationOccurred(.error)
+                        }
+                    }
+                }
             } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "globe")
@@ -283,6 +381,7 @@ public struct AuthView: View {
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.18), lineWidth: 1))
                 .cornerRadius(12)
             }
+            .disabled(viewModel.isLoading)
         }
     }
     

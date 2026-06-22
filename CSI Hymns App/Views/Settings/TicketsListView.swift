@@ -34,23 +34,25 @@ public final class TicketsListViewModel {
 /// A premium, glassmorphic issue tracking screen.
 public struct TicketsListView: View {
     @State private var viewModel = TicketsListViewModel()
+    @State private var theme = ThemeManager.shared
     
     public init() {}
     
     public var body: some View {
         ZStack {
-            // Immersive Glass Background Gradients
-            LinearGradient(
-                colors: [Color(hex: "0D1B2A"), Color(hex: "1B263B")],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            // Adaptive theme background
+            theme.backgroundColor
+                .ignoresSafeArea()
+            
+            if theme.activeTheme != .amoled {
+                theme.backgroundGradient
+                    .ignoresSafeArea()
+            }
             
             VStack {
                 if viewModel.isLoading {
                     ProgressView()
-                        .tint(.white)
+                        .tint(theme.textPrimary)
                         .frame(maxHeight: .infinity)
                 } else if let error = viewModel.errorMessage {
                     errorStateView(error)
@@ -63,6 +65,9 @@ public struct TicketsListView: View {
         }
         .navigationTitle("Lyric Corrections Log")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(theme.secondaryBackgroundColor, for: .navigationBar)
+        .toolbarColorScheme(theme.colorScheme, for: .navigationBar)
+        .toolbar(.hidden, for: .tabBar)
         .onAppear {
             Task {
                 await viewModel.fetchTickets()
@@ -76,15 +81,15 @@ public struct TicketsListView: View {
         VStack(spacing: 16) {
             Image(systemName: "checklist.checked")
                 .font(.system(size: 54))
-                .foregroundColor(.white.opacity(0.4))
+                .foregroundColor(theme.textSecondary.opacity(0.6))
             
             Text("No Reported Issues")
                 .font(.system(size: 18, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundColor(theme.textPrimary)
             
             Text("Any lyric corrections you submit will be displayed here for real-time status tracking.")
                 .font(.system(size: 13))
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
         }
@@ -99,10 +104,11 @@ public struct TicketsListView: View {
             
             Text("Failed to Load Logs")
                 .font(.system(size: 18, weight: .bold))
+                .foregroundColor(theme.textPrimary)
             
             Text(error)
                 .font(.system(size: 13))
-                .foregroundColor(.white.opacity(0.6))
+                .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 30)
             
@@ -113,8 +119,9 @@ public struct TicketsListView: View {
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 8)
-            .background(Color.white.opacity(0.12))
+            .background(theme.surfaceColor)
             .cornerRadius(8)
+            .foregroundColor(theme.textPrimary)
         }
         .frame(maxHeight: .infinity)
     }
@@ -144,7 +151,7 @@ public struct TicketsListView: View {
                 HStack {
                     Text(ticket.ticketKey)
                         .font(.system(size: 14, weight: .bold, design: .monospaced))
-                        .foregroundColor(.blue)
+                        .foregroundColor(theme.accentColor)
                     
                     Spacer()
                     
@@ -155,21 +162,21 @@ public struct TicketsListView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("\(ticket.songType.capitalized) \(ticket.songNumber)")
                         .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(theme.textPrimary)
                     
                     Text(ticket.songTitle)
                         .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundColor(theme.textSecondary)
                 }
                 
                 // Description details if any
                 if let desc = ticket.description, !desc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Text(desc)
                         .font(.system(size: 12))
-                        .foregroundColor(.white.opacity(0.6))
+                        .foregroundColor(theme.textSecondary)
                         .lineLimit(2)
                         .padding(10)
-                        .background(Color.white.opacity(0.04))
+                        .background(theme.surfaceColor)
                         .cornerRadius(8)
                 }
                 
@@ -183,16 +190,14 @@ public struct TicketsListView: View {
                     Image(systemName: "arrow.up.right.square")
                         .font(.system(size: 13))
                 }
-                .foregroundColor(.white.opacity(0.4))
+                .foregroundColor(theme.textSecondary.opacity(0.7))
             }
             .padding(18)
-            .background(
+            .background(theme.cardBackground)
+            .cornerRadius(18)
+            .overlay(
                 RoundedRectangle(cornerRadius: 18)
-                    .fill(Color.white.opacity(0.05))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18)
-                            .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                    )
+                    .stroke(theme.cardStroke, lineWidth: 1)
             )
         }
         .buttonStyle(PlainButtonStyle())
@@ -208,11 +213,11 @@ public struct TicketsListView: View {
             color = Color(hex: "4CAF50")
             bgColor = color.opacity(0.15)
         case "in progress", "active":
-            color = Color(hex: "2196F3")
-            bgColor = color.opacity(0.15)
+            color = theme.accentColor
+            bgColor = theme.accentColor.opacity(0.15)
         case "email sent", "pending":
-            color = Color.white.opacity(0.6)
-            bgColor = Color.white.opacity(0.08)
+            color = theme.textSecondary
+            bgColor = theme.surfaceColor
         default: // To Do, Open, etc.
             color = Color(hex: "FF9800")
             bgColor = color.opacity(0.15)

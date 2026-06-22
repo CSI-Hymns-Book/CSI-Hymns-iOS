@@ -8,11 +8,13 @@ import AVFoundation
 
 /// View representing native AirPlay cast selection widgets.
 public struct AirPlayRoutePicker: UIViewRepresentable {
+    @State private var theme = ThemeManager.shared
+    
     public init() {}
     public func makeUIView(context: Context) -> AVRoutePickerView {
         let picker = AVRoutePickerView()
         picker.activeTintColor = .systemBlue
-        picker.tintColor = .white
+        picker.tintColor = theme.activeTheme == .light ? .darkGray : .white
         return picker
     }
     
@@ -24,8 +26,6 @@ public struct AirPlayRoutePicker: UIViewRepresentable {
 public final class HymnDetailViewModel {
     public var selectedLanguage: SongLanguage = .kannada
     public var fontSize: CGFloat = 18.0
-    public var isFavorite = false
-    public var isFavoriteLoading = false
     public var isShowingReportSheet = false
     public var reportDescription = ""
     public var isReportSubmitting = false
@@ -38,33 +38,10 @@ public final class HymnDetailViewModel {
     
     public init() {}
     
-    public func toggleFavorite(hymn: Hymn) async {
-        isFavoriteLoading = true
-        // Native trigger haptics
-        let generator = UINotificationFeedbackGenerator()
-        generator.notificationOccurred(.success)
-        
-        do {
-            let svc = SupabaseService.instance
-            if svc.isAuthenticated {
-                if isFavorite {
-                    _ = try await svc.removeFavorite(itemNumber: hymn.number, itemType: "hymn")
-                } else {
-                    try await svc.addFavorite(itemNumber: hymn.number, itemType: "hymn")
-                }
-            }
-            isFavorite.toggle()
-        } catch {
-            print("HymnDetailViewModel: Favorite sync fail: \(error)")
-        }
-        isFavoriteLoading = false
-    }
-    
     public func submitReport(hymn: Hymn) async {
         guard !reportDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         isReportSubmitting = true
         
-        // Post issue to Jira REST APIs using JiraService Actor
         let result = await JiraService.shared.createTicket(
             songType: hymn.type.capitalized,
             songNumber: hymn.number,
@@ -76,6 +53,10 @@ public final class HymnDetailViewModel {
         if result.success {
             let generator = UINotificationFeedbackGenerator()
             generator.notificationOccurred(.success)
+            PostHogService.shared.track(event: "jira_ticket_submitted", properties: [
+                "song_number": hymn.number,
+                "song_type": hymn.type
+            ])
         }
         
         isReportSubmitting = false
@@ -87,110 +68,161 @@ public final class HymnDetailViewModel {
 /// A premium, immersive lyrics viewing and audio playing environment.
 public struct HymnDetailView: View {
     let hymn: Hymn
+    @State private var pageFlipVisibility = PageFlipVisibilityService.shared
+    @AppStorage("use_page_swipe_physics") private var usePageSwipe = true
+    @State private var theme = ThemeManager.shared
     @State private var viewModel = HymnDetailViewModel()
     @State private var audio = AudioService.shared
+    @State private var favoritesManager = FavoritesManager.shared
     @State private var isShowingSpeedMenu = false
+    @State private var favoriteScale: CGFloat = 1.0
+    @State private var isAudioPlayerVisible = false
+    @State private var dragTime: Double? = nil
     
     public init(hymn: Hymn) {
         self.hymn = hymn
     }
     
     public var body: some View {
+        @Bindable var viewModel = viewModel
         ZStack {
-            // Liquid Glass Background Gradients
-            LinearGradient(
-                colors: [Color(hex: "0D1B2A"), Color(hex: "1B263B")],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            // Adaptive theme background
+            theme.backgroundColor
+                .ignoresSafeArea()
+            
+            if theme.activeTheme != .amoled {
+                theme.backgroundGradient
+                    .ignoresSafeArea()
+            }
             
             VStack(spacing: 0) {
-                // Header Panel: Bilingual Toggles & Zoom controls
+                // Header Panel: Bilingual Toggles, Zoom controls & Audio toggle
                 headerPanel
                     .padding(.horizontal)
                     .padding(.top, 10)
                 
                 Divider()
-                    .background(Color.white.opacity(0.12))
-                    .padding(.vertical, 12)
+                    .background(theme.strokeColor)
+                    .padding(.vertical, 8)
                 
-                // Content Swiper
-                lyricsSwipeContainer
+                // Elegant metadata header card
+                metadataHeaderCard
+                    .padding(.bottom, 8)
+                
+                // Lyrics: page-flip when enabled in Settings, otherwise continuous scroll.
+                if usePageSwipe && pageFlipVisibility.isVisible {
+                    pageFlipLyricsContainer
+                } else {
+                    continuousLyricsContainer
+                }
                 
                 // Integrated glassmorphic player
-                if audio.isPlaying || audio.isLoading || audio.currentTime > 0 {
+                if isAudioPlayerVisible {
                     glassmorphicAudioPlayer
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
         }
-        .navigationTitle(hymn.title)
+        .navigationTitle("\(hymn.type == "keerthane" ? "Keerthane" : "Hymn") \(hymn.number)")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(theme.secondaryBackgroundColor, for: .navigationBar)
+        .toolbarColorScheme(theme.colorScheme, for: .navigationBar)
+        // Immersive reading navbar auto-hide behavior
+        .toolbar(.hidden, for: .tabBar)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                // Casting picker
+                // Casting pickers (AirPlay always; Chromecast when remotely enabled)
                 AirPlayRoutePicker()
                     .frame(width: 28, height: 28)
+                
+                CastButton(tint: theme.textPrimary)
                 
                 // Issue reporter
                 Button {
                     viewModel.isShowingReportSheet = true
                 } label: {
                     Image(systemName: "exclamationmark.bubble")
-                        .foregroundColor(.white)
+                        .foregroundColor(theme.textPrimary)
                 }
                 
-                // Bookmarking favorites
+                // Heart-shaped toggle favorite buttons
                 Button {
+                    let isFav = favoritesManager.isFavorite(songId: hymn.id)
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.5)) {
+                        favoriteScale = 1.4
+                        favoritesManager.toggleFavorite(song: hymn)
+                    }
                     Task {
-                        await viewModel.toggleFavorite(hymn: hymn)
+                        try? await Task.sleep(for: .seconds(0.15))
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.5)) {
+                            favoriteScale = 1.0
+                        }
                     }
+                    PostHogService.shared.track(event: isFav ? "song_favorite_removed" : "song_favorite_added", properties: [
+                        "song_id": hymn.id,
+                        "song_number": hymn.number,
+                        "song_type": hymn.type,
+                        "song_title": hymn.title
+                    ])
                 } label: {
-                    if viewModel.isFavoriteLoading {
-                        ProgressView()
-                            .tint(.white)
-                    } else {
-                        Image(systemName: viewModel.isFavorite ? "bookmark.fill" : "bookmark")
-                            .foregroundColor(viewModel.isFavorite ? .amber : .white)
-                    }
+                    Image(systemName: favoritesManager.isFavorite(songId: hymn.id) ? "heart.fill" : "heart")
+                        .foregroundColor(favoritesManager.isFavorite(songId: hymn.id) ? .red : theme.textPrimary)
+                        .scaleEffect(favoriteScale)
                 }
             }
         }
-        .sheet(isPresented: &viewModel.isShowingReportSheet) {
+        .sheet(isPresented: $viewModel.isShowingReportSheet) {
             reportLyricsSheet
         }
         .onAppear {
-            // Record song in recent reading history
+            let progress = ReadingProgressService.load(itemType: hymn.type, itemId: "\(hymn.number)")
+            if let font = progress.fontSize { viewModel.fontSize = CGFloat(font) }
+            if let lang = progress.language {
+                viewModel.selectedLanguage = lang == "english" ? .english : .kannada
+            }
             let prefix = hymn.type.lowercased() == "keerthane" ? "keerthane_" : "hymn_"
             RecentSongsService.shared.addRecentSong(prefix: prefix, number: hymn.number)
-            
-            // Load and buffer streaming audio
-            let streamUrl = "https://raw.githubusercontent.com/reynold29/midi-files/main/Hymns/Hymn_\(hymn.number).ogg"
-            audio.loadAndPlay(urlString: streamUrl, title: "Hymn \(hymn.number)", subtitle: hymn.title)
+            PostHogService.shared.trackScreen("\(hymn.type.capitalized) Detail Screen")
+            PostHogService.shared.track(event: "song_detail_opened", properties: [
+                "song_id": hymn.id,
+                "song_number": hymn.number,
+                "song_title": hymn.title,
+                "song_type": hymn.type,
+                "song_signature": hymn.signature,
+                "initial_language": viewModel.selectedLanguage.rawValue
+            ])
+        }
+        .onDisappear {
+            ReadingProgressService.save(
+                itemType: hymn.type,
+                itemId: "\(hymn.number)",
+                fontSize: Double(viewModel.fontSize),
+                language: viewModel.selectedLanguage == .english ? "english" : "kannada"
+            )
+            audio.pause()
         }
     }
     
     // MARK: - Subviews
     
     private var headerPanel: some View {
-        HStack {
+        HStack(spacing: 8) {
             // Font Zoom Controllers
-            HStack(spacing: 14) {
+            HStack(spacing: 8) {
                 Button {
                     let impact = UIImpactFeedbackGenerator(style: .light)
                     impact.impactOccurred()
                     viewModel.fontSize = max(14, viewModel.fontSize - 2)
                 } label: {
                     Image(systemName: "minus.circle")
-                        .font(.system(size: 20))
-                        .foregroundColor(.white.opacity(0.8))
+                        .font(.system(size: 16))
+                        .foregroundColor(theme.textPrimary.opacity(0.8))
                 }
                 
                 Text("\(Int(viewModel.fontSize))")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 24)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(theme.textPrimary)
+                    .frame(width: 18)
                 
                 Button {
                     let impact = UIImpactFeedbackGenerator(style: .light)
@@ -198,19 +230,62 @@ public struct HymnDetailView: View {
                     viewModel.fontSize = min(40, viewModel.fontSize + 2)
                 } label: {
                     Image(systemName: "plus.circle")
-                        .font(.system(size: 20))
-                        .foregroundColor(.white.opacity(0.8))
+                        .font(.system(size: 16))
+                        .foregroundColor(theme.textPrimary.opacity(0.8))
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color.white.opacity(0.06))
-            .cornerRadius(12)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(theme.surfaceColor)
+            .cornerRadius(10)
+            .layoutPriority(0.3)
             
-            Spacer()
+            // Audio Intent Button (plays only on deliberate tap)
+            Button {
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    isAudioPlayerVisible.toggle()
+                    if isAudioPlayerVisible {
+                        let streamUrl = SongAudioURL.streamURL(for: hymn)
+                        audio.loadAndPlay(urlString: streamUrl, title: "\(hymn.type == "keerthane" ? "Keerthane" : "Hymn") \(hymn.number)", subtitle: hymn.title)
+                        PostHogService.shared.track(event: "audio_playback_started", properties: [
+                            "song_id": hymn.id,
+                            "song_number": hymn.number,
+                            "song_type": hymn.type,
+                            "song_title": hymn.title
+                        ])
+                    } else {
+                        audio.pause()
+                        PostHogService.shared.track(event: "audio_playback_dismissed", properties: [
+                            "song_id": hymn.id,
+                            "song_number": hymn.number,
+                            "song_type": hymn.type
+                        ])
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: isAudioPlayerVisible ? (audio.isPlaying ? "waveform.and.mic" : "pause.circle.fill") : "play.circle.fill")
+                        .font(.system(size: 14))
+                    Text(isAudioPlayerVisible ? (audio.isPlaying ? "Playing" : "Paused") : "Audio")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(isAudioPlayerVisible ? theme.textPrimary.opacity(0.12) : theme.surfaceColor)
+                .cornerRadius(10)
+                .foregroundColor(theme.textPrimary)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(isAudioPlayerVisible ? theme.textPrimary.opacity(0.3) : theme.strokeColor, lineWidth: 1)
+                )
+            }
+            .layoutPriority(0.3)
+            
+            Spacer(minLength: 4)
             
             // Bilingual Language Selector
-            HStack(spacing: 6) {
+            HStack(spacing: 2) {
                 ForEach(HymnDetailViewModel.SongLanguage.allCases) { lang in
                     Button {
                         let impact = UIImpactFeedbackGenerator(style: .medium)
@@ -218,59 +293,155 @@ public struct HymnDetailView: View {
                         withAnimation {
                             viewModel.selectedLanguage = lang
                         }
+                        PostHogService.shared.track(event: "lyrics_language_switched", properties: [
+                            "song_id": hymn.id,
+                            "song_number": hymn.number,
+                            "song_type": hymn.type,
+                            "selected_language": lang.rawValue
+                        ])
                     } label: {
                         Text(lang.rawValue)
-                            .font(.system(size: 13, weight: .semibold))
-                            .padding(.horizontal, 14)
+                            .font(.system(size: 12, weight: .semibold))
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .padding(.horizontal, 10)
                             .padding(.vertical, 6)
-                            .background(viewModel.selectedLanguage == lang ? Color.white.opacity(0.2) : Color.clear)
-                            .cornerRadius(8)
-                            .foregroundColor(.white)
+                            .background(viewModel.selectedLanguage == lang ? theme.textPrimary.opacity(0.12) : Color.clear)
+                            .cornerRadius(6)
+                            .foregroundColor(theme.textPrimary)
                     }
                 }
             }
             .padding(4)
-            .background(Color.white.opacity(0.06))
+            .background(theme.surfaceColor)
             .cornerRadius(10)
+            .layoutPriority(1)
         }
     }
+
     
-    /// Swipable Multi-Page Lyrics Container using SwiftUI TabView page styling.
-    private var lyricsSwipeContainer: some View {
-        let text = viewModel.selectedLanguage == .kannada ? hymn.lyricsKannada : hymn.lyricsEnglish
-        let paragraphs = text.components(separatedBy: "\n\n").filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        
-        return TabView {
-            ForEach(0..<paragraphs.count, id: \.self) { idx in
-                ScrollView {
-                    Text(paragraphs[idx])
-                        .font(.system(size: viewModel.fontSize, weight: .medium))
-                        .lineSpacing(8)
-                        .foregroundColor(.white)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 36)
-                        .frame(maxWidth: .infinity)
+    private var metadataHeaderCard: some View {
+        VStack(spacing: 8) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(hymn.type.uppercased()) NO. \(hymn.number)")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(theme.textSecondary.opacity(0.8))
+                        .tracking(1.5)
+                    
+                    Text(hymn.title)
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(theme.textPrimary)
+                        .multilineTextAlignment(.leading)
                 }
+                Spacer()
+                
+                // Song type badge
+                Text(hymn.type == "keerthane" ? "Keerthane" : "Hymn")
+                    .font(.system(size: 11, weight: .bold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(theme.textPrimary.opacity(0.08))
+                    .cornerRadius(6)
+                    .foregroundColor(theme.textPrimary)
+            }
+            
+            if !hymn.signature.isEmpty {
+                HStack(spacing: 12) {
+                    HStack(spacing: 4) {
+                        Image(hymn.type == "keerthane" ? "keerthane" : "hymn")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 16, height: 16)
+                        Text("Meter: \(hymn.signature)")
+                            .font(.system(size: 12))
+                    }
+                    .foregroundColor(theme.textSecondary)
+                    
+                    Spacer()
+                    
+                    HStack(spacing: 4) {
+                        Image(systemName: "person.circle")
+                            .font(.system(size: 11))
+                        Text("Traditional / Classic")
+                            .font(.system(size: 12))
+                    }
+                    .foregroundColor(theme.textSecondary)
+                }
+                .padding(.top, 4)
             }
         }
-        .tabViewStyle(PageTabViewStyle(indexDisplayMode: .always))
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(theme.surfaceColor)
+                .overlay(RoundedRectangle(cornerRadius: 16).stroke(theme.strokeColor, lineWidth: 1))
+        )
+        .padding(.horizontal)
+    }
+    
+    /// Swipeable page-flip lyrics reader (Settings: Page Swipe Transitions).
+    private var pageFlipLyricsContainer: some View {
+        let text = viewModel.selectedLanguage == .kannada ? hymn.lyricsKannada : hymn.lyricsEnglish
+        return PageFlipLyricsView(
+            lyrics: text,
+            fontSize: viewModel.fontSize,
+            textColor: theme.textPrimary,
+            accent: theme.accentColor
+        )
+    }
+    
+    /// Continuous vertical scroll lyrics container for uninterrupted native reading experience.
+    private var continuousLyricsContainer: some View {
+        let text = viewModel.selectedLanguage == .kannada ? hymn.lyricsKannada : hymn.lyricsEnglish
+        let paragraphs = text.components(separatedBy: "\n\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        
+        return ScrollView {
+            LazyVStack(spacing: 24) {
+                ForEach(0..<paragraphs.count, id: \.self) { idx in
+                    Text(paragraphs[idx])
+                        .font(.system(size: viewModel.fontSize, weight: .semibold))
+                        .lineSpacing(viewModel.fontSize * 0.35)
+                        .foregroundColor(theme.textPrimary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 28)
+                }
+            }
+            .padding(.vertical, 20)
+        }
     }
     
     private var glassmorphicAudioPlayer: some View {
         VStack(spacing: 12) {
             // Progression Track bar & timings
             HStack {
-                Text(formatTime(audio.currentTime))
+                Text(formatTime(dragTime ?? audio.currentTime))
                     .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundColor(theme.textSecondary)
                 
-                Slider(value: Binding(get: { audio.currentTime }, set: { audio.seek(to: $0) }), in: 0...max(1, audio.duration))
-                    .accentColor(.white)
+                Slider(
+                    value: Binding(
+                        get: { dragTime ?? audio.currentTime },
+                        set: { dragTime = $0 }
+                    ),
+                    in: 0...max(1, audio.duration),
+                    onEditingChanged: { editing in
+                        if !editing {
+                            if let targetTime = dragTime {
+                                audio.seek(to: targetTime)
+                            }
+                            dragTime = nil
+                        }
+                    }
+                )
+                .accentColor(theme.textPrimary)
                 
                 Text(formatTime(audio.duration))
                     .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundColor(theme.textSecondary)
             }
             .padding(.horizontal)
             
@@ -284,7 +455,7 @@ public struct HymnDetailView: View {
                 } label: {
                     Image(systemName: audio.isLooping ? "repeat.1" : "repeat")
                         .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(audio.isLooping ? .amber : .white.opacity(0.6))
+                        .foregroundColor(audio.isLooping ? .red : theme.textSecondary)
                 }
                 
                 // Backward 5s
@@ -293,7 +464,7 @@ public struct HymnDetailView: View {
                 } label: {
                     Image(systemName: "gobackward.5")
                         .font(.system(size: 22))
-                        .foregroundColor(.white)
+                        .foregroundColor(theme.textPrimary)
                 }
                 
                 // Play / Pause
@@ -302,16 +473,16 @@ public struct HymnDetailView: View {
                 } label: {
                     ZStack {
                         Circle()
-                            .fill(Color.white)
+                            .fill(theme.textPrimary)
                             .frame(width: 54, height: 54)
                         
                         if audio.isLoading {
                             ProgressView()
-                                .tint(.black)
+                                .tint(theme.backgroundColor)
                         } else {
                             Image(systemName: audio.isPlaying ? "pause.fill" : "play.fill")
                                 .font(.system(size: 22))
-                                .foregroundColor(.black)
+                                .foregroundColor(theme.backgroundColor)
                         }
                     }
                 }
@@ -322,7 +493,7 @@ public struct HymnDetailView: View {
                 } label: {
                     Image(systemName: "goforward.5")
                         .font(.system(size: 22))
-                        .foregroundColor(.white)
+                        .foregroundColor(theme.textPrimary)
                 }
                 
                 // Speed Controller
@@ -344,8 +515,8 @@ public struct HymnDetailView: View {
                         .font(.system(size: 13, weight: .bold, design: .monospaced))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
-                        .background(Capsule().fill(Color.white.opacity(0.12)))
-                        .foregroundColor(.white)
+                        .background(Capsule().fill(theme.surfaceColor))
+                        .foregroundColor(theme.textPrimary)
                 }
             }
         }
@@ -357,7 +528,7 @@ public struct HymnDetailView: View {
                 .fill(.ultraThinMaterial)
                 .overlay(
                     Rectangle()
-                        .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                        .stroke(theme.strokeColor, lineWidth: 1)
                 )
                 .ignoresSafeArea()
         )
@@ -398,9 +569,4 @@ public struct HymnDetailView: View {
         let secs = Int(seconds) % 60
         return String(format: "%d:%02d", mins, secs)
     }
-}
-
-// MARK: - Custom Colors Ext
-extension Color {
-    static let amber = Color(hex: "FFC107")
 }

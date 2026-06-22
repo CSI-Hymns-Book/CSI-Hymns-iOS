@@ -2,6 +2,7 @@ import SwiftUI
 
 /// A premium, glassmorphic view rendering the user's recently read hymns and keerthanes.
 public struct RecentSongsView: View {
+    @State private var theme = ThemeManager.shared
     @State private var recentsService = RecentSongsService.shared
     @State private var recentSongsList: [Hymn] = []
     
@@ -9,13 +10,14 @@ public struct RecentSongsView: View {
     
     public var body: some View {
         ZStack {
-            // Glass background
-            LinearGradient(
-                colors: [Color(hex: "0D1B2A"), Color(hex: "1B263B")],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            // Adaptive theme backgrounds
+            theme.backgroundColor
+                .ignoresSafeArea()
+            
+            if theme.activeTheme != .amoled {
+                theme.backgroundGradient
+                    .ignoresSafeArea()
+            }
             
             VStack {
                 if recentSongsList.isEmpty {
@@ -27,6 +29,8 @@ public struct RecentSongsView: View {
         }
         .navigationTitle("Recently Viewed")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(theme.secondaryBackgroundColor, for: .navigationBar)
+        .toolbarColorScheme(theme.colorScheme, for: .navigationBar)
         .toolbar {
             if !recentSongsList.isEmpty {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -41,6 +45,7 @@ public struct RecentSongsView: View {
                 }
             }
         }
+        .toolbar(.hidden, for: .tabBar)
         .onAppear {
             loadMatchedSongs()
         }
@@ -52,15 +57,15 @@ public struct RecentSongsView: View {
         VStack(spacing: 16) {
             Image(systemName: "clock.badge.exclamationmark")
                 .font(.system(size: 54))
-                .foregroundColor(.white.opacity(0.3))
+                .foregroundColor(theme.textSecondary.opacity(0.35))
             
             Text("No Reading History")
                 .font(.system(size: 18, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundColor(theme.textPrimary)
             
             Text("Hymns and keerthanes you read will appear here for quick access later.")
                 .font(.system(size: 13))
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
         }
@@ -75,39 +80,43 @@ public struct RecentSongsView: View {
                         HStack(spacing: 14) {
                             ZStack {
                                 RoundedRectangle(cornerRadius: 10)
-                                    .fill(Color.white.opacity(0.12))
+                                    .fill(theme.accentColor.opacity(0.12))
                                     .frame(width: 42, height: 42)
+                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(theme.accentColor.opacity(0.25), lineWidth: 1))
                                 
-                                Text("🎵")
-                                    .font(.system(size: 18))
+                                Image(song.type == "keerthane" ? "keerthane" : "hymn")
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(width: 30, height: 30)
                             }
                             
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("\(song.number): \(song.title)")
                                     .font(.system(size: 15, weight: .semibold))
-                                    .foregroundColor(.white)
+                                    .foregroundColor(theme.textPrimary)
                                     .multilineTextAlignment(.leading)
                                 
                                 if !song.signature.isEmpty {
                                     Text(song.signature)
                                         .font(.system(size: 11))
-                                        .foregroundColor(.white.opacity(0.5))
+                                        .foregroundColor(theme.textSecondary)
                                 }
                             }
                             Spacer()
                             
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 13, weight: .bold))
-                                .foregroundColor(.white.opacity(0.3))
+                                .foregroundColor(theme.textSecondary.opacity(0.7))
                         }
                         .padding(12)
                         .background(
                             RoundedRectangle(cornerRadius: 14)
-                                .fill(Color.white.opacity(0.05))
+                                .fill(theme.cardBackground)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 14)
-                                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                                        .stroke(theme.cardStroke, lineWidth: 1)
                                 )
+                                .shadow(color: theme.shadowColor, radius: 4, y: 2)
                         )
                     }
                     .buttonStyle(PlainButtonStyle())
@@ -117,33 +126,23 @@ public struct RecentSongsView: View {
         }
     }
     
-    // MARK: - Helpers
-    
     private func loadMatchedSongs() {
-        let hymnsSeed = [
-            Hymn(number: 1, title: "ಪರಮ ತಂದೆಯೇ ಪರಮಾದರದಿ", signature: "C.M", lyricsKannada: "1. ಪರಮ...", lyricsEnglish: "1. Heavenly Father..."),
-            Hymn(number: 25, title: "ಯೇಸುವೇ ನಿನ್ನ ಒಲವು ದೊಡ್ಡದು", signature: "L.M", lyricsKannada: "1. ಯೇಸುವೇ...", lyricsEnglish: "1. Jesus Thy Love..."),
-            Hymn(number: 110, title: "ಮಹಾ ಪ್ರಭುವೇ ಸ್ತುತಿ ಹಾಗೂ ಘನತೆ", signature: "D.C.M", lyricsKannada: "1. ಮಹಾ...", lyricsEnglish: "1. O Great Lord..."),
-            Hymn(number: 212, title: "ಶುದ್ಧಾತ್ಮನೇ ನೀ ಬಾರಯ್ಯ", signature: "7.7.7.7", lyricsKannada: "1. ಶುದ್ಧಾತ್ಮನೇ...", lyricsEnglish: "1. Holy Spirit Come..."),
-            Hymn(number: 304, title: "ಕ್ರಿಸ್ತನೆ ಜಯಶಾಲಿ", signature: "C.M", lyricsKannada: "1. ಕ್ರಿಸ್ತನೆ...", lyricsEnglish: "1. Christ the Victor...")
-        ]
-        let keerthanesSeed = [
-            Hymn(number: 1, title: "ದೇವಕುಮಾರನೇ ಧನ್ಯಾವಾದಗಳು", signature: "6.7.7.7", lyricsKannada: "1. ದೇವಕುಮಾರನೇ...", lyricsEnglish: "1. Son of God..."),
-            Hymn(number: 10, title: "ಯೇಸು ನಮ್ಮ ಆಧಾರ", signature: "C.M", lyricsKannada: "1. ಯೇಸು...", lyricsEnglish: "1. Jesus our Anchor...")
-        ]
-        
         var matched: [Hymn] = []
         
         for key in recentsService.recentSongKeys {
             if key.hasPrefix("hymn_") {
                 let num = Int(key.replacingOccurrences(of: "hymn_", with: "")) ?? 0
-                if let song = hymnsSeed.first(where: { $0.number == num }) {
+                if let song = FavoritesManager.shared.getHymnFromCache(number: num, type: "hymn") {
                     matched.append(song)
+                } else {
+                    matched.append(Hymn(number: num, title: "Hymn \(num)", signature: "", lyricsKannada: "", lyricsEnglish: "", type: "hymn"))
                 }
             } else if key.hasPrefix("keerthane_") {
                 let num = Int(key.replacingOccurrences(of: "keerthane_", with: "")) ?? 0
-                if let song = keerthanesSeed.first(where: { $0.number == num }) {
+                if let song = FavoritesManager.shared.getHymnFromCache(number: num, type: "keerthane") {
                     matched.append(song)
+                } else {
+                    matched.append(Hymn(number: num, title: "Keerthane \(num)", signature: "", lyricsKannada: "", lyricsEnglish: "", type: "keerthane"))
                 }
             }
         }

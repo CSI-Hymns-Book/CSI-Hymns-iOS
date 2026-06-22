@@ -30,28 +30,25 @@ public final class OrderOfServiceReaderViewModel {
     }
     
     /// Groups pages by their active sections (when a page defines a title).
+    /// Mirroring legacy Flutter's sequential ordered category block index exactly.
     public var groupedSections: [(title: String, pages: [OrderPage])] {
-        var result: [(title: String, pages: [OrderPage])] = []
-        var activeTitle = ""
-        var currentPages: [OrderPage] = []
+        var sections: [(title: String, pages: [OrderPage])] = []
+        var activeSectionTitle = ""
         
         for page in pages {
-            if let t = page.title, !t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                if !currentPages.isEmpty {
-                    result.append((title: activeTitle, pages: currentPages))
-                }
-                activeTitle = t
-                currentPages = [page]
+            let explicitTitle = (page.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !explicitTitle.isEmpty {
+                activeSectionTitle = explicitTitle
+            }
+            
+            if let idx = sections.firstIndex(where: { $0.title == activeSectionTitle }) {
+                sections[idx].pages.append(page)
             } else {
-                currentPages.append(page)
+                sections.append((title: activeSectionTitle, pages: [page]))
             }
         }
         
-        if !currentPages.isEmpty {
-            result.append((title: activeTitle, pages: currentPages))
-        }
-        
-        return result
+        return sections
     }
     
     public func jumpToPageNo(_ pageNo: Int) {
@@ -62,18 +59,62 @@ public final class OrderOfServiceReaderViewModel {
         }
     }
     
+    public func reload() {
+        loadLiturgyPages()
+    }
+    
     private func loadLiturgyPages() {
         self.isLoading = true
         
-        // 1. Attempt loading from cached UserDefaults JSON
-        if let cachedData = UserDefaults.standard.data(forKey: "csi_cached_liturgies_json"),
-           let decoded = try? JSONDecoder().decode([OrderPage].self, from: cachedData) {
-            self.pages = decoded.filter { $0.type == self.type }.sorted(by: { $0.pageNo < $1.pageNo })
-            self.isLoading = false
-            return
+        // 1. Attempt loading from Flutter-aligned cached UserDefaults JSON
+        if let cachedData = UserDefaults.standard.data(forKey: "orderOfServiceData") {
+            do {
+                let parsed = try OrderPage.parsePages(from: cachedData)
+                let filtered = parsed.filter { $0.type == self.type }
+                if !filtered.isEmpty {
+                    self.pages = filtered
+                    self.isLoading = false
+                    print("[OrderOfServiceReader] Loaded \(filtered.count) pages from 'orderOfServiceData' cache.")
+                    return
+                }
+            } catch {
+                print("[OrderOfServiceReader] Error parsing 'orderOfServiceData' cache: \(error)")
+            }
         }
         
-        // 2. Fallback: Seed offline bundles for compile safety & offline users
+        // 2. Backwards compatibility: Attempt loading from legacy csi_cached_liturgies_json
+        if let cachedData = UserDefaults.standard.data(forKey: "csi_cached_liturgies_json") {
+            do {
+                let parsed = try OrderPage.parsePages(from: cachedData)
+                let filtered = parsed.filter { $0.type == self.type }
+                if !filtered.isEmpty {
+                    self.pages = filtered
+                    self.isLoading = false
+                    print("[OrderOfServiceReader] Loaded \(filtered.count) pages from legacy 'csi_cached_liturgies_json' cache.")
+                    return
+                }
+            } catch {
+                print("[OrderOfServiceReader] Error parsing legacy cache: \(error)")
+            }
+        }
+        
+        // 3. Fallback: Load from compiled offline seed string
+        if let seedData = LiturgyOfflineSeeds.fallbackJSON.data(using: .utf8) {
+            do {
+                let parsed = try OrderPage.parsePages(from: seedData)
+                let filtered = parsed.filter { $0.type == self.type }
+                if !filtered.isEmpty {
+                    self.pages = filtered
+                    self.isLoading = false
+                    print("[OrderOfServiceReader] Loaded \(filtered.count) pages from offline seeds.")
+                    return
+                }
+            } catch {
+                print("[OrderOfServiceReader] Error parsing offline seeds: \(error)")
+            }
+        }
+        
+        // 4. Last fallback: Seed hardcoded mock items if everything else fails
         loadBundledMockLiturgies()
     }
     
@@ -101,25 +142,28 @@ public final class OrderOfServiceReaderViewModel {
     }
 }
 
-/// An immersive, sliding liturgy document reader.
+/// An immersive liturgy reader with a home hub (jump / open full book) before paging.
 public struct OrderOfServiceReaderView: View {
     let type: String
-    let title: String
+    let englishHeader: String
+    let kannadaHeader: String
     
     @State private var viewModel: OrderOfServiceReaderViewModel
+    @State private var hasSelectedPage = false
+    @State private var jumpPageText = ""
     @State private var isShowingIndexSheet = false
     @State private var isShowingReportSheet = false
     @State private var reportDescription = ""
     
-    public init(type: String, title: String) {
+    public init(type: String, englishHeader: String, kannadaHeader: String) {
         self.type = type
-        self.title = title
+        self.englishHeader = englishHeader
+        self.kannadaHeader = kannadaHeader
         self._viewModel = State(initialValue: OrderOfServiceReaderViewModel(type: type))
     }
     
     public var body: some View {
         ZStack {
-            // Immersive dark glass background
             LinearGradient(
                 colors: [Color(hex: "0D1B2A"), Color(hex: "132237"), Color(hex: "0D1B2A")],
                 startPoint: .top,
@@ -134,30 +178,123 @@ public struct OrderOfServiceReaderView: View {
                         .frame(maxHeight: .infinity)
                 } else if viewModel.pages.isEmpty {
                     emptyStateView
+                } else if !hasSelectedPage {
+                    homeHubView
                 } else {
                     liturgyPagingController
-                    
+                }
+                
+                if !viewModel.isLoading && !viewModel.pages.isEmpty {
                     bottomControlPanel
                 }
             }
         }
-        .navigationTitle(title)
+        .navigationTitle(hasSelectedPage ? currentPageTitle : "\(kannadaHeader) / \(englishHeader)")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(hasSelectedPage)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    isShowingReportSheet = true
-                } label: {
-                    Image(systemName: "exclamationmark.bubble")
-                        .foregroundColor(.white)
+            if hasSelectedPage {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        withAnimation { hasSelectedPage = false }
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .foregroundColor(.white)
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { isShowingReportSheet = true } label: {
+                        Image(systemName: "exclamationmark.bubble")
+                            .foregroundColor(.white)
+                    }
                 }
             }
         }
-        .sheet(isPresented: &isShowingIndexSheet) {
-            allPagesSheet
+        .toolbar(.hidden, for: .tabBar)
+        .sheet(isPresented: $isShowingIndexSheet) { allPagesSheet }
+        .sheet(isPresented: $isShowingReportSheet) { reportIssueSheet }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("csi_liturgies_refreshed"))) { _ in
+            viewModel.reload()
         }
-        .sheet(isPresented: &isShowingReportSheet) {
-            reportIssueSheet
+    }
+    
+    private var currentPageTitle: String {
+        guard !viewModel.pages.isEmpty else { return englishHeader }
+        let title = (viewModel.pages[viewModel.currentPageIndex].title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return title.isEmpty ? englishHeader : title
+    }
+    
+    private var homeHubView: some View {
+        VStack(spacing: 20) {
+            Spacer()
+            
+            Text(type == "festival" ? "Habbada Aaradhana Krama" : "Huduvada Aaradhana Krama")
+                .font(.system(size: 24, weight: .black))
+                .foregroundColor(.white)
+                .multilineTextAlignment(.center)
+            
+            Text("Enter a page number to jump directly to that page")
+                .font(.system(size: 14))
+                .foregroundColor(.white.opacity(0.7))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+            
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.white.opacity(0.5))
+                TextField("Jump to page number (e.g., 1, 98, 100)", text: $jumpPageText)
+                    .keyboardType(.numberPad)
+                    .foregroundColor(.white)
+                    .submitLabel(.go)
+                    .onSubmit { submitJump() }
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
+            .background(Color.white.opacity(0.08))
+            .cornerRadius(28)
+            .overlay(RoundedRectangle(cornerRadius: 28).stroke(Color.white.opacity(0.12), lineWidth: 1))
+            .padding(.horizontal, 24)
+            
+            Button {
+                submitJump()
+            } label: {
+                Text("Go to Page")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(.black)
+                    .frame(maxWidth: 280)
+                    .padding(.vertical, 14)
+                    .background(Color.white)
+                    .cornerRadius(28)
+            }
+            .disabled(jumpPageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .opacity(jumpPageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1)
+            
+            Button {
+                withAnimation { hasSelectedPage = true }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "book.fill")
+                    Text("Open Full Book")
+                }
+                .font(.system(size: 16, weight: .heavy))
+                .foregroundColor(.white)
+                .frame(maxWidth: 280)
+                .padding(.vertical, 16)
+                .background(Color.white.opacity(0.12))
+                .cornerRadius(28)
+                .overlay(RoundedRectangle(cornerRadius: 28).stroke(Color.white.opacity(0.2), lineWidth: 1))
+            }
+            .padding(.top, 4)
+            
+            Spacer()
+        }
+    }
+    
+    private func submitJump() {
+        guard let target = Int(jumpPageText.trimmingCharacters(in: .whitespacesAndNewlines)) else { return }
+        viewModel.jumpToPageNo(target)
+        if viewModel.pages.contains(where: { $0.pageNo == target }) {
+            withAnimation { hasSelectedPage = true }
         }
     }
     
@@ -229,14 +366,11 @@ public struct OrderOfServiceReaderView: View {
     
     private var bottomControlPanel: some View {
         VStack(spacing: 12) {
-            // Horizontal quick chips window listing neighbor page numbers
             HStack(spacing: 8) {
-                Button {
-                    isShowingIndexSheet = true
-                } label: {
+                Button { isShowingIndexSheet = true } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "list.bullet.rectangle.portrait")
-                        Text("All")
+                        Text(hasSelectedPage ? "Page \(viewModel.pages[viewModel.currentPageIndex].pageNo)" : "All pages")
                     }
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(.white)
@@ -249,9 +383,10 @@ public struct OrderOfServiceReaderView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(viewModel.visiblePageNumbers, id: \.self) { no in
-                            let isCurrent = viewModel.pages[viewModel.currentPageIndex].pageNo == no
+                            let isCurrent = hasSelectedPage && viewModel.pages[viewModel.currentPageIndex].pageNo == no
                             Button {
                                 viewModel.jumpToPageNo(no)
+                                withAnimation { hasSelectedPage = true }
                             } label: {
                                 Text("\(no)")
                                     .font(.system(size: 13, weight: .bold))
@@ -267,41 +402,38 @@ public struct OrderOfServiceReaderView: View {
             }
             .padding(.horizontal, 16)
             
-            // Pager stepping bar
-            HStack {
-                Button {
-                    withAnimation {
-                        viewModel.currentPageIndex = max(0, viewModel.currentPageIndex - 1)
+            if hasSelectedPage {
+                HStack {
+                    Button {
+                        withAnimation { viewModel.currentPageIndex = max(0, viewModel.currentPageIndex - 1) }
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundColor(viewModel.currentPageIndex > 0 ? .white : .white.opacity(0.25))
+                            .padding(12)
                     }
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(viewModel.currentPageIndex > 0 ? .white : .white.opacity(0.25))
-                        .padding(12)
-                }
-                .disabled(viewModel.currentPageIndex == 0)
-                
-                Spacer()
-                
-                Text("Page \(viewModel.pages[viewModel.currentPageIndex].pageNo) of \(viewModel.pages.last?.pageNo ?? 0)")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white.opacity(0.6))
-                
-                Spacer()
-                
-                Button {
-                    withAnimation {
-                        viewModel.currentPageIndex = min(viewModel.pages.count - 1, viewModel.currentPageIndex + 1)
+                    .disabled(viewModel.currentPageIndex == 0)
+                    
+                    Spacer()
+                    
+                    Text("Page \(viewModel.pages[viewModel.currentPageIndex].pageNo) of \(viewModel.pages.last?.pageNo ?? 0)")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.white.opacity(0.6))
+                    
+                    Spacer()
+                    
+                    Button {
+                        withAnimation { viewModel.currentPageIndex = min(viewModel.pages.count - 1, viewModel.currentPageIndex + 1) }
+                    } label: {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundColor(viewModel.currentPageIndex < viewModel.pages.count - 1 ? .white : .white.opacity(0.25))
+                            .padding(12)
                     }
-                } label: {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(viewModel.currentPageIndex < viewModel.pages.count - 1 ? .white : .white.opacity(0.25))
-                        .padding(12)
+                    .disabled(viewModel.currentPageIndex == viewModel.pages.count - 1)
                 }
-                .disabled(viewModel.currentPageIndex == viewModel.pages.count - 1)
+                .padding(.horizontal, 20)
             }
-            .padding(.horizontal, 20)
         }
         .padding(.vertical, 12)
         .background(Color(hex: "0D1B2A").opacity(0.95))
@@ -328,6 +460,7 @@ public struct OrderOfServiceReaderView: View {
                                     Button {
                                         viewModel.jumpToPageNo(p.pageNo)
                                         isShowingIndexSheet = false
+                                        withAnimation { hasSelectedPage = true }
                                     } label: {
                                         Text("\(p.pageNo)")
                                             .font(.system(size: 14, weight: .bold))
@@ -416,9 +549,11 @@ public struct OrderOfServiceReaderView: View {
     private func formatHeaderTitle(_ raw: String) -> String {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if let range = trimmed.range(of: " / ") {
-            let english = trimmed[..<range.lowerBound]
-            let kannada = trimmed[range.upperBound...]
-            return "\(english)\n\(kannada)"
+            let english = trimmed[..<range.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
+            let kannada = trimmed[range.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
+            if !english.isEmpty && !kannada.isEmpty {
+                return "\(english)\n\n\(kannada)"
+            }
         }
         return trimmed
     }
@@ -428,23 +563,22 @@ public struct OrderOfServiceReaderView: View {
         let desc = reportDescription.trimmingCharacters(in: .whitespacesAndNewlines)
         
         Task {
-            do {
-                // Submit issue directly to Atlassian Jira Service
-                try await JiraService.shared.createCorrectionTicket(
-                    songType: "Liturgy (\(type))",
-                    songNumber: pageNo,
-                    songTitle: "Order of Service - Page \(pageNo)",
-                    description: desc
-                )
-                
-                await MainActor.run {
+            // Submit issue directly to Atlassian Jira Service
+            let result = await JiraService.shared.createTicket(
+                songType: "Liturgy (\(type))",
+                songNumber: pageNo,
+                songTitle: "Order of Service - Page \(pageNo)",
+                description: desc,
+                appVersion: "1.0.0+1"
+            )
+            
+            await MainActor.run {
+                if result.success {
                     isShowingReportSheet = false
                     reportDescription = ""
                     let generator = UINotificationFeedbackGenerator()
                     generator.notificationOccurred(.success)
                 }
-            } catch {
-                print("OrderOfServiceReaderView: Jira report failed: \(error)")
             }
         }
     }

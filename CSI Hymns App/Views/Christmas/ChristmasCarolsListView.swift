@@ -1,54 +1,41 @@
 import SwiftUI
 import Observation
 
-/// View model driving parish choice chips, lists, and search queries.
 @Observable
 public final class ChristmasCarolsListViewModel {
     public var searchQuery = ""
-    public var selectedParishFilter = "All"
-    public var isShowingUploadForm = false
+    public var isShowingCreateChurch = false
     
     public init() {}
     
-    /// Extract all unique parish names from loaded custom carols to populate filters.
-    public func uniqueParishes(from carols: [ChristmasCarol]) -> [String] {
-        var list = ["All"]
-        let set = Set(carols.map { $0.parish.trimmingCharacters(in: .whitespacesAndNewlines) })
-        list.append(contentsOf: set.sorted())
-        return list
-    }
-    
-    /// Filters carols list based on active search texts and parish choice chips.
-    public func filteredCarols(from carols: [ChristmasCarol]) -> [ChristmasCarol] {
+    public func filteredChurches(_ churches: [CarolChurch], service: ChristmasCarolsService) -> [CarolChurch] {
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        
-        var results = carols
-        if selectedParishFilter != "All" {
-            results = carols.filter { $0.parish.trimmingCharacters(in: .whitespacesAndNewlines) == selectedParishFilter }
+        guard !query.isEmpty else { return churches }
+        return churches.filter { church in
+            if church.name.lowercased().contains(query) { return true }
+            return service.songs(for: church.id).contains { $0.title.lowercased().contains(query) }
+                || service.pdfs(for: church.id).contains { $0.title.lowercased().contains(query) }
         }
-        
-        if !query.isEmpty {
-            results = results.filter { carol in
-                carol.title.lowercased().contains(query) ||
-                carol.parish.lowercased().contains(query) ||
-                carol.submitter.lowercased().contains(query)
-            }
-        }
-        
-        return results
     }
 }
 
-/// A premium, festive parish community carols browser.
+/// Church-first community carols browser.
 public struct ChristmasCarolsListView: View {
     @State private var service = ChristmasCarolsService.shared
     @State private var viewModel = ChristmasCarolsListViewModel()
+    @State private var isShowingSignInPrompt = false
+    @State private var toastMessage: String?
+    @State private var toastIsError = false
     
     public init() {}
     
+    private var filteredChurches: [CarolChurch] {
+        viewModel.filteredChurches(service.churches, service: service)
+    }
+    
     public var body: some View {
+        @Bindable var viewModel = viewModel
         ZStack {
-            // Festive emerald and dark blue background
             LinearGradient(
                 colors: [Color(hex: "0D1B2A"), Color(hex: "0B2516"), Color(hex: "0D1B2A")],
                 startPoint: .top,
@@ -56,196 +43,193 @@ public struct ChristmasCarolsListView: View {
             )
             .ignoresSafeArea()
             
-            VStack(spacing: 16) {
-                // Custom Search
+            VStack(spacing: 0) {
+                headerSection
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .padding(.bottom, 12)
+                
                 customSearchBar
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
                 
-                // Parish Choice Chips
-                parishChoiceChips
-                
-                if service.isLoading {
-                    ProgressView()
-                        .tint(.white)
-                        .frame(maxHeight: .infinity)
-                } else if service.carols.isEmpty {
+                if service.isLoading && service.churches.isEmpty {
+                    Spacer()
+                    ProgressView().tint(.white)
+                    Spacer()
+                } else if filteredChurches.isEmpty {
                     emptyStateView
                 } else {
-                    carolsScrollView
+                    churchListView
                 }
             }
-            .padding(.horizontal)
             
-            // Floating Upload Button
-            floatingUploadButton
+            floatingCreateButton
         }
         .navigationTitle("Community Carols")
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: &viewModel.isShowingUploadForm) {
-            AddCarolFormView()
-        }
-        .onAppear {
-            Task {
-                try? await service.fetchParishCarols()
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { Task { await syncCarols() } } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .disabled(service.isLoading)
             }
+        }
+        .toolbar(.hidden, for: .tabBar)
+        .refreshable { await syncCarols() }
+        .sheet(isPresented: $viewModel.isShowingCreateChurch) {
+            AddChurchFormView()
+        }
+        .alert("Sign In Required", isPresented: $isShowingSignInPrompt) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Sign in to create a church or add songs/PDFs.")
+        }
+        .appToast(message: $toastMessage, isError: toastIsError)
+        .task { await syncCarols() }
+        .onChange(of: service.lastErrorMessage) { _, msg in
+            if let msg { toastMessage = msg; toastIsError = true }
+        }
+        .onChange(of: service.lastSuccessMessage) { _, msg in
+            if let msg { toastMessage = msg; toastIsError = false }
         }
     }
     
-    // MARK: - Subviews
+    private var headerSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Parish Carol Libraries")
+                .font(.system(size: 22, weight: .black))
+                .foregroundColor(.white)
+            Text("\(service.churches.count) churches · \(service.songs.count) songs · \(service.pdfs.count) PDFs")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.white.opacity(0.65))
+            Text("1) Create a church  2) Add songs (lyrics) or PDF sheets inside it. Everyone can browse; only uploaders and admins can delete.")
+                .font(.system(size: 12))
+                .foregroundColor(.white.opacity(0.5))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
     
     private var customSearchBar: some View {
-        HStack {
-            Image(systemName: "magnifyingglass")
-                .foregroundColor(.white.opacity(0.6))
-            
-            TextField("Search parish carols...", text: $viewModel.searchQuery)
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass").foregroundColor(.white.opacity(0.6))
+            TextField("Search churches, songs, PDFs…", text: $viewModel.searchQuery)
                 .foregroundColor(.white)
-                .accentColor(.white)
-            
+                .textInputAutocapitalization(.never)
             if !viewModel.searchQuery.isEmpty {
-                Button {
-                    viewModel.searchQuery = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.white.opacity(0.6))
+                Button { viewModel.searchQuery = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundColor(.white.opacity(0.6))
                 }
             }
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white.opacity(0.08))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.white.opacity(0.15), lineWidth: 1)
-                )
-        )
-        .padding(.top, 8)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(Color.white.opacity(0.08))
+        .cornerRadius(14)
     }
     
-    private var parishChoiceChips: some View {
-        let list = viewModel.uniqueParishes(from: service.carols)
-        return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(list, id: \.self) { parish in
-                    let isSelected = viewModel.selectedParishFilter == parish
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            viewModel.selectedParishFilter = parish
+    private var churchListView: some View {
+        ScrollView {
+            LazyVStack(spacing: 12) {
+                ForEach(filteredChurches) { church in
+                    NavigationLink(destination: ChurchDetailView(church: church)) {
+                        HStack(spacing: 14) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color(hex: "B22222").opacity(0.25))
+                                    .frame(width: 48, height: 48)
+                                Text("🏛️").font(.system(size: 22))
+                            }
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(church.name)
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .multilineTextAlignment(.leading)
+                                HStack(spacing: 12) {
+                                    Label("\(service.songs(for: church.id).count) songs", systemImage: "music.note")
+                                    Label("\(service.pdfs(for: church.id).count) PDFs", systemImage: "doc.fill")
+                                }
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.white.opacity(0.62))
+                            }
+                            Spacer(minLength: 8)
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.white.opacity(0.35))
                         }
-                    } label: {
-                        Text(parish)
-                            .font(.system(size: 13, weight: .semibold))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(
-                                Capsule()
-                                    .fill(isSelected ? Color.white.opacity(0.2) : Color.white.opacity(0.05))
-                                    .overlay(Capsule().stroke(Color.white.opacity(isSelected ? 0.4 : 0.1), lineWidth: 1))
-                            )
-                            .foregroundColor(.white)
+                        .padding(16)
+                        .background(Color.white.opacity(0.07))
+                        .cornerRadius(16)
                     }
+                    .buttonStyle(.plain)
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 100)
         }
     }
     
     private var emptyStateView: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "music.quarternote.button")
-                .font(.system(size: 54))
-                .foregroundColor(.white.opacity(0.3))
-            
-            Text("No Community Carols")
-                .font(.system(size: 18, weight: .bold))
-                
-            Text("Be the first to upload your parish church carols so others can join the celebration!")
-                .font(.system(size: 13))
-                .foregroundColor(.white.opacity(0.5))
+        VStack(spacing: 14) {
+            Text("🎄").font(.system(size: 48))
+            Text("No churches yet")
+                .font(.headline)
+                .foregroundColor(.white)
+            Text("Create a church first, then add songs or PDFs inside it.")
+                .font(.subheadline)
+                .foregroundColor(.white.opacity(0.6))
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
+                .padding(.horizontal, 32)
+            Button("Create Church") {
+                if SupabaseService.instance.isAuthenticated {
+                    viewModel.isShowingCreateChurch = true
+                } else {
+                    isShowingSignInPrompt = true
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Color(hex: "B22222"))
         }
         .frame(maxHeight: .infinity)
     }
     
-    private var carolsScrollView: some View {
-        let list = viewModel.filteredCarols(from: service.carols)
-        return ScrollView {
-            LazyVStack(spacing: 12) {
-                ForEach(list) { carol in
-                    NavigationLink(destination: CarolDetailView(carol: carol)) {
-                        HStack(spacing: 14) {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color.white.opacity(0.12))
-                                    .frame(width: 46, height: 46)
-                                
-                                Text("🎄")
-                                    .font(.system(size: 22))
-                            }
-                            
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(carol.title)
-                                    .font(.system(size: 16, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .multilineTextAlignment(.leading)
-                                
-                                HStack(spacing: 6) {
-                                    Image(systemName: "house")
-                                        .font(.system(size: 10))
-                                    Text(carol.parish)
-                                        .font(.system(size: 11))
-                                }
-                                .foregroundColor(.white.opacity(0.6))
-                            }
-                            Spacer()
-                            
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundColor(.white.opacity(0.3))
-                        }
-                        .padding(14)
-                        .background(
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(Color.white.opacity(0.05))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 16)
-                                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                                )
-                        )
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
-            }
-            .padding(.bottom, 80) // Spacing for floating button
-        }
-    }
-    
-    private var floatingUploadButton: some View {
+    private var floatingCreateButton: some View {
         VStack {
             Spacer()
             HStack {
                 Spacer()
                 Button {
-                    let impact = UIImpactFeedbackGenerator(style: .medium)
-                    impact.impactOccurred()
-                    viewModel.isShowingUploadForm = true
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "icloud.and.arrow.up")
-                            .font(.system(size: 16, weight: .bold))
-                        Text("Add Carol")
-                            .font(.system(size: 14, weight: .bold))
+                    if SupabaseService.instance.isAuthenticated {
+                        viewModel.isShowingCreateChurch = true
+                    } else {
+                        isShowingSignInPrompt = true
                     }
-                    .foregroundColor(.black)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
-                    .background(Color.white)
-                    .cornerRadius(28)
-                    .shadow(color: Color.black.opacity(0.3), radius: 10, y: 5)
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 56, height: 56)
+                        .background(Color(hex: "B22222"))
+                        .clipShape(Circle())
+                        .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
                 }
                 .padding(.trailing, 20)
-                .padding(.bottom, 20)
+                .padding(.bottom, 24)
             }
+        }
+    }
+    
+    private func syncCarols() async {
+        do {
+            try await service.fetchParishCarols(forceGitHub: true)
+            toastMessage = service.churches.isEmpty
+                ? "No churches yet. Create one to get started."
+                : "Synced \(service.churches.count) churches."
+            toastIsError = false
+        } catch {
+            toastMessage = "Couldn't sync. Pull to retry."
+            toastIsError = true
         }
     }
 }
