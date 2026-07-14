@@ -37,40 +37,106 @@ public struct ChristmasLandingView: View {
                         headerTitleRow
                             .padding(.top, 24)
                         
-                        // Large Categories navigation cards
-                        VStack(spacing: 16) {
-                            NavigationLink(destination: HymnsListView(title: "Hymns", isKeerthanes: false, selectedTab: $selectedTab)) {
-                                CategoryGlassCard(
-                                    title: "Hymns",
-                                    subtitle: "Traditional hymns from the CSI hymn book",
-                                    emoji: "🎵",
-                                    gradients: [Color(hex: "2E7D32"), Color(hex: "1B5E20")],
-                                    isHighlighted: false
-                                )
+                        // Grouped Sections
+                        VStack(spacing: 24) {
+                            // Section 1: CSI Hymns & Keerthanes
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("CSI Hymns & Keerthanes")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundColor(theme.accentColor)
+                                    .padding(.horizontal, 4)
+                                
+                                Button {
+                                    withAnimation {
+                                        AppNavigationService.shared.activeSection = .csi
+                                        selectedTab = 0
+                                    }
+                                } label: {
+                                    CategoryGlassCard(
+                                        title: "Hymns",
+                                        subtitle: "ಕನ್ನಡ ಸಂಗೀತಗಳು",
+                                        imageName: "hymn",
+                                        gradients: [Color(hex: "2E7D32"), Color(hex: "1B5E20")],
+                                        isHighlighted: false
+                                    )
+                                }
+                                .buttonStyle(CategoryCardButtonStyle())
+                                
+                                Button {
+                                    withAnimation {
+                                        AppNavigationService.shared.activeSection = .csi
+                                        selectedTab = 1
+                                    }
+                                } label: {
+                                    CategoryGlassCard(
+                                        title: "Keerthanes",
+                                        subtitle: "ಕನ್ನಡ ಸಂಕೀರ್ತನೆಗಳು",
+                                        imageName: "keerthane",
+                                        gradients: [Color(hex: "1976D2"), Color(hex: "0D47A1")],
+                                        isHighlighted: false
+                                    )
+                                }
+                                .buttonStyle(CategoryCardButtonStyle())
+                                
+                                Button {
+                                    withAnimation {
+                                        AppNavigationService.shared.activeSection = .csi
+                                        selectedTab = 2
+                                    }
+                                } label: {
+                                    CategoryGlassCard(
+                                        title: "Order of Service",
+                                        subtitle: "ಸಿ.ಎಸ್.ಐ. ಆರಾಧನಾ ಕ್ರಮ",
+                                        imageName: "order_of_service_book",
+                                        gradients: [Color(hex: "C62828"), Color(hex: "8E0000")],
+                                        isHighlighted: false
+                                    )
+                                }
+                                .buttonStyle(CategoryCardButtonStyle())
                             }
-                            .buttonStyle(CategoryCardButtonStyle())
                             
-                            NavigationLink(destination: HymnsListView(title: "Keerthanes", isKeerthanes: true, selectedTab: $selectedTab)) {
-                                CategoryGlassCard(
-                                    title: "Keerthane",
-                                    subtitle: "Kannada devotional songs and lyrics",
-                                    emoji: "🎶",
-                                    gradients: [Color(hex: "1976D2"), Color(hex: "0D47A1")],
-                                    isHighlighted: false
-                                )
+                            // Section 2: Mangalore Hymns
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Mangalore Hymns")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundColor(.orange)
+                                    .padding(.horizontal, 4)
+                                
+                                Button {
+                                    withAnimation {
+                                        AppNavigationService.shared.activeSection = .mt
+                                        selectedTab = 0
+                                    }
+                                } label: {
+                                    CategoryGlassCard(
+                                        title: "M.T. Hymns",
+                                        subtitle: "ಮಂಗಳೂರು ಕನ್ನಡ ಸಂಗೀತಗಳು",
+                                        imageName: "hymn",
+                                        gradients: [Color(hex: "E67E22"), Color(hex: "D35400")],
+                                        isHighlighted: true
+                                    )
+                                }
+                                .buttonStyle(CategoryCardButtonStyle())
                             }
-                            .buttonStyle(CategoryCardButtonStyle())
                             
-                            NavigationLink(destination: ChristmasCarolsListView()) {
-                                CategoryGlassCard(
-                                    title: "Christmas Carols",
-                                    subtitle: "Celebrate the season with festive songs",
-                                    emoji: "🎄",
-                                    gradients: [Color(hex: "C62828"), Color(hex: "8E0000")],
-                                    isHighlighted: true
-                                )
+                            // Section 3: Festive specials
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Christmas Specials")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundColor(Color(hex: "B22222"))
+                                    .padding(.horizontal, 4)
+                                
+                                NavigationLink(destination: ChristmasCarolsListView()) {
+                                    CategoryGlassCard(
+                                        title: "Christmas Carols",
+                                        subtitle: "Celebrate the season with festive songs",
+                                        imageName: "hymn",
+                                        gradients: [Color(hex: "C62828"), Color(hex: "8E0000")],
+                                        isHighlighted: true
+                                    )
+                                }
+                                .buttonStyle(CategoryCardButtonStyle())
                             }
-                            .buttonStyle(CategoryCardButtonStyle())
                         }
                         
                         // Easter egg footer
@@ -208,21 +274,24 @@ public struct ChristmasLandingView: View {
 struct CategoryGlassCard: View {
     let title: String
     let subtitle: String
-    let emoji: String
+    let imageName: String
     let gradients: [Color]
     let isHighlighted: Bool
     
     var body: some View {
         HStack(spacing: 16) {
-            // Emoji plate
+            // Icon plate
             ZStack {
                 RoundedRectangle(cornerRadius: 14)
                     .fill(Color.white.opacity(0.22))
                     .frame(width: 52, height: 52)
                     .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.35), lineWidth: 1))
                 
-                Text(emoji)
-                    .font(.system(size: 26))
+                Image(imageName)
+                    .renderingMode(.original)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 32, height: 32)
             }
             
             VStack(alignment: .leading, spacing: 4) {
@@ -243,7 +312,7 @@ struct CategoryGlassCard: View {
                 }
                 
                 Text(subtitle)
-                    .font(.system(size: 13))
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.white.opacity(0.9))
                     .multilineTextAlignment(.leading)
                     .lineLimit(2)

@@ -95,19 +95,99 @@ public final class TicketsService: Sendable {
                 .filter { !Self.isResolvedStatus($0.jiraStatus) }
                 .prefix(maxTickets)
             
-            for _ in active {
-                // Background update status
-                // In production: issues a check to Jira and updates Supabase
-                try await Task.sleep(for: .milliseconds(250))
+            for ticket in active {
+                await JiraService.shared.syncTicketStatus(ticketKey: ticket.ticketKey)
+                await JiraService.shared.syncTicketComments(ticketId: ticket.id, ticketKey: ticket.ticketKey)
+                try? await Task.sleep(for: .milliseconds(250))
             }
         } catch {
             print("TicketsService: Status sync failed: \(error)")
         }
     }
     
+    /// Sync comments from Jira to Supabase for a specific ticket
+    public func syncTicketComments(ticketId: String, ticketKey: String) async {
+        await JiraService.shared.syncTicketComments(ticketId: ticketId, ticketKey: ticketKey)
+    }
+    
+    /// Fetch messages from Supabase for a specific ticket
+    public func getTicketMessages(ticketKey: String) async throws -> [TicketMessage] {
+        #if canImport(Supabase)
+        let client = SupabaseService.instance.client
+        let messages: [TicketMessage] = try await client.from("ticket_messages")
+            .select()
+            .eq("ticket_key", value: ticketKey)
+            .execute()
+            .value
+        return messages.sorted { ($0.createdAt ?? .distantPast) < ($1.createdAt ?? .distantPast) }
+        #else
+        return []
+        #endif
+    }
+    
+    /// Send a message: post comment to Jira and insert to Supabase
+    public func sendTicketMessage(ticketId: String, ticketKey: String, message: String) async throws -> TicketMessage? {
+        // Post directly to Jira ticket
+        let posted = await JiraService.shared.addComment(ticketKey: ticketKey, commentText: message)
+        guard posted else { return nil }
+        
+        #if canImport(Supabase)
+        struct InsertMessage: Encodable {
+            let ticket_id: String
+            let ticket_key: String
+            let sender: String
+            let message: String
+        }
+        
+        let client = SupabaseService.instance.client
+        let payload = InsertMessage(
+            ticket_id: ticketId,
+            ticket_key: ticketKey,
+            sender: "user",
+            message: message
+        )
+        
+        let response: TicketMessage = try await client.from("ticket_messages")
+            .insert(payload)
+            .select()
+            .single()
+            .execute()
+            .value
+        return response
+        #else
+        return TicketMessage(
+            id: UUID().uuidString,
+            ticketId: ticketId,
+            ticketKey: ticketKey,
+            sender: "user",
+            message: message,
+            createdAt: Date()
+        )
+        #endif
+    }
+    
     /// Utility check for resolved statuses.
     public static func isResolvedStatus(_ status: String) -> Bool {
         let value = status.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         return value == "done" || value == "resolved" || value == "closed"
+    }
+}
+
+/// Represents a support message synced with Jira and Supabase
+public struct TicketMessage: Codable, Identifiable, Hashable, Sendable {
+    public let id: String?
+    public let ticketId: String
+    public let ticketKey: String
+    public let sender: String // "user" or "admin"
+    public let message: String
+    public let createdAt: Date?
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case ticketId = "ticket_id"
+        case ticketKey = "ticket_key"
+        case sender
+        case message
+        case createdAt = "created_at"
     }
 }

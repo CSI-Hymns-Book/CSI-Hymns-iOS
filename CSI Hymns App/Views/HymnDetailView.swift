@@ -70,14 +70,21 @@ public struct HymnDetailView: View {
     let hymn: Hymn
     @State private var pageFlipVisibility = PageFlipVisibilityService.shared
     @AppStorage("use_page_swipe_physics") private var usePageSwipe = true
+    @AppStorage("isDetailControlsHidden") private var isHidden = false
     @State private var theme = ThemeManager.shared
     @State private var viewModel = HymnDetailViewModel()
     @State private var audio = AudioService.shared
+    @State private var midiAudio = MidiPlaybackEngine.shared
     @State private var favoritesManager = FavoritesManager.shared
     @State private var isShowingSpeedMenu = false
     @State private var favoriteScale: CGFloat = 1.0
     @State private var isAudioPlayerVisible = false
     @State private var dragTime: Double? = nil
+    
+    // MT Tune variants
+    @State private var tuneOptions: [String] = []
+    @State private var selectedTune: String? = nil
+    @State private var isShowingAdvancedMidi = false
     
     public init(hymn: Hymn) {
         self.hymn = hymn
@@ -97,17 +104,22 @@ public struct HymnDetailView: View {
             
             VStack(spacing: 0) {
                 // Header Panel: Bilingual Toggles, Zoom controls & Audio toggle
-                headerPanel
-                    .padding(.horizontal)
-                    .padding(.top, 10)
-                
-                Divider()
-                    .background(theme.strokeColor)
-                    .padding(.vertical, 8)
-                
-                // Elegant metadata header card
-                metadataHeaderCard
-                    .padding(.bottom, 8)
+                if !isHidden {
+                    headerPanel
+                        .padding(.horizontal)
+                        .padding(.top, 10)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    
+                    Divider()
+                        .background(theme.strokeColor)
+                        .padding(.vertical, 8)
+                        .transition(.opacity)
+                    
+                    // Elegant metadata header card
+                    metadataHeaderCard
+                        .padding(.bottom, 8)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
                 
                 // Lyrics: page-flip when enabled in Settings, otherwise continuous scroll.
                 if usePageSwipe && pageFlipVisibility.isVisible {
@@ -117,9 +129,14 @@ public struct HymnDetailView: View {
                 }
                 
                 // Integrated glassmorphic player
-                if isAudioPlayerVisible {
-                    glassmorphicAudioPlayer
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                if isAudioPlayerVisible && !isHidden {
+                    if hymn.type == "mt" {
+                        glassmorphicMidiPlayer
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    } else {
+                        glassmorphicAudioPlayer
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                 }
             }
         }
@@ -130,6 +147,15 @@ public struct HymnDetailView: View {
         .toolbar(.hidden, for: .tabBar)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
+                Button {
+                    withAnimation(.spring()) {
+                        isHidden.toggle()
+                    }
+                } label: {
+                    Image(systemName: isHidden ? "eye.slash" : "eye")
+                        .foregroundColor(theme.textPrimary)
+                }
+                
                 // Casting pickers (AirPlay always; Chromecast when remotely enabled)
                 AirPlayRoutePicker()
                     .frame(width: 28, height: 28)
@@ -199,6 +225,44 @@ public struct HymnDetailView: View {
                 language: viewModel.selectedLanguage == .english ? "english" : "kannada"
             )
             audio.pause()
+            midiAudio.stop()
+        }
+        .task(id: hymn.id) {
+            tuneOptions = SongAudioURL.extractTuneOptions(for: hymn)
+            selectedTune = tuneOptions.first
+            
+            if hymn.type == "mt" {
+                await withTaskGroup(of: String?.self) { group in
+                    for opt in tuneOptions {
+                        let cleanBase = opt.filter { $0.isNumber }
+                        for suffix in ["a", "b", "c", "d"] {
+                            let candidate = cleanBase + suffix
+                            if candidate != opt {
+                                group.addTask {
+                                    let urlStr = SongAudioURL.streamURL(for: hymn, selectedTune: candidate)
+                                    if await SongAudioURL.checkUrlExists(urlStr: urlStr) {
+                                        return candidate
+                                    }
+                                    return nil
+                                }
+                            }
+                        }
+                    }
+                    
+                    for await verifiedOption in group {
+                        if let valid = verifiedOption, !tuneOptions.contains(valid) {
+                            tuneOptions.append(valid)
+                        }
+                    }
+                }
+                
+                tuneOptions.sort { a, b in
+                    let numA = Int(a.filter { $0.isNumber }) ?? 0
+                    let numB = Int(b.filter { $0.isNumber }) ?? 0
+                    if numA == numB { return a < b }
+                    return numA < numB
+                }
+            }
         }
     }
     
@@ -245,8 +309,14 @@ public struct HymnDetailView: View {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                     isAudioPlayerVisible.toggle()
                     if isAudioPlayerVisible {
-                        let streamUrl = SongAudioURL.streamURL(for: hymn)
-                        audio.loadAndPlay(urlString: streamUrl, title: "\(hymn.type == "keerthane" ? "Keerthane" : "Hymn") \(hymn.number)", subtitle: hymn.title)
+                        let streamUrl = SongAudioURL.streamURL(for: hymn, selectedTune: selectedTune)
+                        if hymn.type == "mt" {
+                            Task {
+                                await midiAudio.loadAndPlay(urlString: streamUrl)
+                            }
+                        } else {
+                            audio.loadAndPlay(urlString: streamUrl, title: "\(hymn.type == "keerthane" ? "Keerthane" : "Hymn") \(hymn.number)", subtitle: hymn.title)
+                        }
                         PostHogService.shared.track(event: "audio_playback_started", properties: [
                             "song_id": hymn.id,
                             "song_number": hymn.number,
@@ -254,7 +324,11 @@ public struct HymnDetailView: View {
                             "song_title": hymn.title
                         ])
                     } else {
-                        audio.pause()
+                        if hymn.type == "mt" {
+                            midiAudio.stop()
+                        } else {
+                            audio.pause()
+                        }
                         PostHogService.shared.track(event: "audio_playback_dismissed", properties: [
                             "song_id": hymn.id,
                             "song_number": hymn.number,
@@ -264,9 +338,10 @@ public struct HymnDetailView: View {
                 }
             } label: {
                 HStack(spacing: 4) {
-                    Image(systemName: isAudioPlayerVisible ? (audio.isPlaying ? "waveform.and.mic" : "pause.circle.fill") : "play.circle.fill")
+                    let playing = hymn.type == "mt" ? midiAudio.isPlaying : audio.isPlaying
+                    Image(systemName: isAudioPlayerVisible ? (playing ? "waveform.and.mic" : "pause.circle.fill") : "play.circle.fill")
                         .font(.system(size: 14))
-                    Text(isAudioPlayerVisible ? (audio.isPlaying ? "Playing" : "Paused") : "Audio")
+                    Text(isAudioPlayerVisible ? (playing ? "Playing" : "Paused") : "Audio")
                         .font(.system(size: 12, weight: .semibold))
                 }
                 .padding(.horizontal, 10)
@@ -561,11 +636,251 @@ public struct HymnDetailView: View {
         }
     }
     
+    private var glassmorphicMidiPlayer: some View {
+        VStack(spacing: 12) {
+            if tuneOptions.count > 1 {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(tuneOptions, id: \.self) { tune in
+                            Button {
+                                if selectedTune != tune {
+                                    selectedTune = tune
+                                    let streamUrl = SongAudioURL.streamURL(for: hymn, selectedTune: tune)
+                                    Task {
+                                        midiAudio.stop()
+                                        await midiAudio.loadAndPlay(urlString: streamUrl)
+                                    }
+                                }
+                            } label: {
+                                Text(tune.uppercased())
+                                    .font(.system(size: 13, weight: selectedTune == tune ? .bold : .medium))
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                                    .background(selectedTune == tune ? theme.textPrimary : Color.clear)
+                                    .foregroundColor(selectedTune == tune ? theme.backgroundColor : theme.textPrimary)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 16)
+                                            .stroke(theme.textPrimary, lineWidth: 1)
+                                    )
+                                    .cornerRadius(16)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                }
+            }
+            
+            // Progress Bar
+            HStack(spacing: 12) {
+                Text(formatTime(midiAudio.currentTime))
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(theme.textSecondary)
+                
+                Slider(
+                    value: Binding(
+                        get: { dragTime ?? midiAudio.currentTime },
+                        set: { dragTime = $0 }
+                    ),
+                    in: 0...max(1, midiAudio.duration),
+                    onEditingChanged: { editing in
+                        if !editing {
+                            if let targetTime = dragTime {
+                                midiAudio.seek(to: targetTime)
+                            }
+                            dragTime = nil
+                        }
+                    }
+                )
+                .accentColor(theme.textPrimary)
+                
+                Text(formatTime(midiAudio.duration))
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(theme.textSecondary)
+            }
+            .padding(.horizontal)
+            
+            // Audio Controls Center
+            HStack(spacing: 32) {
+                // Loop button
+                Button {
+                    let impact = UIImpactFeedbackGenerator(style: .light)
+                    impact.impactOccurred()
+                    midiAudio.isLooping.toggle()
+                } label: {
+                    Image(systemName: midiAudio.isLooping ? "repeat.1" : "repeat")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(midiAudio.isLooping ? .red : theme.textSecondary)
+                }
+                
+                // Backward 5s
+                Button {
+                    midiAudio.skipBackward()
+                } label: {
+                    Image(systemName: "gobackward.5")
+                        .font(.system(size: 22))
+                        .foregroundColor(theme.textPrimary)
+                }
+                
+                // Play / Pause
+                Button {
+                    midiAudio.togglePlayback()
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(theme.textPrimary)
+                            .frame(width: 54, height: 54)
+                        
+                        if midiAudio.isLoading {
+                            ProgressView()
+                                .tint(theme.backgroundColor)
+                        } else {
+                            Image(systemName: midiAudio.isPlaying ? "pause.fill" : "play.fill")
+                                .font(.system(size: 22))
+                                .foregroundColor(theme.backgroundColor)
+                        }
+                    }
+                }
+                
+                // Forward 5s
+                Button {
+                    midiAudio.skipForward()
+                } label: {
+                    Image(systemName: "goforward.5")
+                        .font(.system(size: 22))
+                        .foregroundColor(theme.textPrimary)
+                }
+                
+                // Speed Controller
+                Menu {
+                    ForEach([0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { rate in
+                        Button {
+                            midiAudio.playbackRate = Float(rate)
+                        } label: {
+                            HStack {
+                                Text("\(String(format: "%.2fx", rate))")
+                                if abs(midiAudio.playbackRate - Float(rate)) < 0.05 {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    Text("\(String(format: "%.2fx", midiAudio.playbackRate))")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(theme.textSecondary)
+                        .frame(width: 44)
+                }
+                
+                // Advanced Options
+                Button {
+                    isShowingAdvancedMidi = true
+                } label: {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 18))
+                        .foregroundColor(theme.textPrimary)
+                }
+            }
+        }
+        .padding(.vertical, 16)
+        .padding(.horizontal, 12)
+        .background(
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    Rectangle()
+                        .stroke(theme.strokeColor, lineWidth: 1)
+                )
+                .ignoresSafeArea()
+        )
+        .sheet(isPresented: $isShowingAdvancedMidi) {
+            AdvancedMidiSettingsView()
+        }
+    }
+
     // MARK: - Helpers
     private func formatTime(_ seconds: Double) -> String {
-        guard !seconds.isNaN else { return "0:00" }
-        let mins = Int(seconds) / 60
-        let secs = Int(seconds) % 60
-        return String(format: "%d:%02d", mins, secs)
+        guard !seconds.isNaN else { return "00:00" }
+        let minutes = Int(seconds) / 60
+        let seconds = Int(seconds) % 60
+        return String(format: "%02d:%02d", minutes, seconds)
+    }
+}
+
+// MARK: - Advanced MIDI Settings View
+struct AdvancedMidiSettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    
+    @State private var engine = MidiPlaybackEngine.shared
+    @State private var globalInstrumentId: Int = UserDefaults.standard.integer(forKey: "midiInstrumentId")
+    
+    let instrumentOptions: [(name: String, gmId: UInt8, id: Int)] = [
+        ("Reed Organ", 20, 0),
+        ("Grand Piano", 0, 1),
+        ("Pipe Organ", 19, 2),
+        ("Choir Aahs", 52, 3)
+    ]
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                Section(header: Text("Global Settings")) {
+                    Picker("Instrument", selection: $globalInstrumentId) {
+                        ForEach(instrumentOptions, id: \.id) { option in
+                            Text(option.name).tag(option.id)
+                        }
+                    }
+                    .onChange(of: globalInstrumentId) { newValue in
+                        engine.updateGlobalInstrument(to: newValue)
+                    }
+                    
+                    Stepper("Transpose: \(engine.transpose > 0 ? "+" : "")\(engine.transpose)", value: Binding(
+                        get: { engine.transpose },
+                        set: { engine.transpose = $0 }
+                    ), in: -12...12)
+                }
+                
+                Section(header: Text("Track Routing (SATB)"), footer: Text("Allows assigning different instruments to individual parts. Assuming Track 1 = Soprano, Track 2 = Alto, Track 3 = Tenor, Track 4 = Bass.")) {
+                    Toggle("Enable Advanced Routing", isOn: Binding(
+                        get: { engine.isAdvancedMode },
+                        set: { engine.isAdvancedMode = $0 }
+                    ))
+                    
+                    if engine.isAdvancedMode {
+                        ForEach(0..<4, id: \.self) { index in
+                            Picker(partName(for: index), selection: Binding(
+                                get: { engine.satbInstruments[index] },
+                                set: { newValue in
+                                    engine.satbInstruments[index] = newValue
+                                }
+                            )) {
+                                ForEach(instrumentOptions, id: \.gmId) { option in
+                                    Text(option.name).tag(option.gmId)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Advanced Audio Options")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+    
+    private func partName(for index: Int) -> String {
+        switch index {
+        case 0: return "Soprano (Track 1)"
+        case 1: return "Alto (Track 2)"
+        case 2: return "Tenor (Track 3)"
+        case 3: return "Bass (Track 4)"
+        default: return "Track \(index + 1)"
+        }
     }
 }

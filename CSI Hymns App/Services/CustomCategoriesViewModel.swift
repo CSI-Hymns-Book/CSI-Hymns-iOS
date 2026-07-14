@@ -151,9 +151,13 @@ public final class CustomCategoriesViewModel {
     /// replaces the local cache with the authoritative remote set.
     public static func syncAfterSignIn() async {
         let local: [CustomCategory]
-        if let data = UserDefaults.standard.data(forKey: storageKey),
-           let decoded = try? JSONDecoder().decode([CustomCategory].self, from: data) {
-            local = decoded
+        if let data = UserDefaults.standard.data(forKey: storageKey) {
+            do {
+                local = try JSONDecoder().decode([CustomCategory].self, from: data)
+            } catch {
+                print("CustomCategoriesViewModel: JSON decoding failed: \(error)")
+                local = []
+            }
         } else {
             local = []
         }

@@ -6,6 +6,7 @@ public struct DynamicCategoryScreenView: View {
     let categoryName: String
     let hymnNumbers: [Int]
     let keerthaneNumbers: [Int]
+    let directHymnsList: [Hymn]?
     
     @State private var theme = ThemeManager.shared
     @State private var selectedSegment = 0 // 0 = Hymns, 1 = Keerthanes
@@ -13,10 +14,11 @@ public struct DynamicCategoryScreenView: View {
     @State private var keerthanes: [Hymn] = []
     @State private var isLoading = false
     
-    public init(categoryName: String, hymnNumbers: [Int], keerthaneNumbers: [Int]) {
+    public init(categoryName: String, hymnNumbers: [Int] = [], keerthaneNumbers: [Int] = [], directHymnsList: [Hymn]? = nil) {
         self.categoryName = categoryName
         self.hymnNumbers = hymnNumbers
         self.keerthaneNumbers = keerthaneNumbers
+        self.directHymnsList = directHymnsList
     }
     
     private var hasHymns: Bool { !hymnNumbers.isEmpty }
@@ -34,24 +36,32 @@ public struct DynamicCategoryScreenView: View {
             }
             
             VStack(spacing: 0) {
-                // Segmented Tab Picker
-                if hasHymns && hasKeerthanes {
-                    pickerView
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                }
-                
-                if isLoading {
-                    ProgressView()
-                        .tint(theme.textPrimary)
-                        .frame(maxHeight: .infinity)
-                } else {
-                    let activeList = selectedSegment == 0 ? hymns : keerthanes
-                    
-                    if activeList.isEmpty {
+                if let directList = directHymnsList {
+                    if directList.isEmpty {
                         emptyStateView
                     } else {
-                        songsListView(activeList)
+                        songsListView(directList)
+                    }
+                } else {
+                    // Segmented Tab Picker
+                    if hasHymns && hasKeerthanes {
+                        pickerView
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                    }
+                    
+                    if isLoading {
+                        ProgressView()
+                            .tint(theme.textPrimary)
+                            .frame(maxHeight: .infinity)
+                    } else {
+                        let activeList = selectedSegment == 0 ? hymns : keerthanes
+                        
+                        if activeList.isEmpty {
+                            emptyStateView
+                        } else {
+                            songsListView(activeList)
+                        }
                     }
                 }
             }
@@ -61,8 +71,10 @@ public struct DynamicCategoryScreenView: View {
         .csiGlassNavigationBar(theme: theme)
         .toolbar(.hidden, for: .tabBar)
         .onAppear {
-            setupInitialTab()
-            loadCategorySongs()
+            if directHymnsList == nil {
+                setupInitialTab()
+                loadCategorySongs()
+            }
         }
     }
     

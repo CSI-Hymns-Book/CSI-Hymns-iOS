@@ -3,10 +3,17 @@ import SwiftUI
 /// Core Page structure for liturgies downloaded from remote JSON.
 public struct OrderPage: Codable, Identifiable, Hashable, Sendable {
     public var id: Int { pageNo }
-    public let pageNo: Int
-    public let title: String?
-    public let content: String
-    public let type: String // 'regular' or 'festival'
+    public var pageNo: Int
+    public var title: String?
+    public var content: String
+    public var type: String // 'regular' or 'festival'
+    
+    enum CodingKeys: String, CodingKey {
+        case pageNo = "page_no"
+        case title
+        case content
+        case type
+    }
     
     public init(pageNo: Int, title: String?, content: String, type: String) {
         self.pageNo = pageNo
@@ -185,6 +192,25 @@ public struct OrderOfServiceListView: View {
             .navigationTitle("ಆರಾಧನಾ ಕ್ರಮ / Liturgies")
             .navigationBarTitleDisplayMode(.inline)
             .csiGlassNavigationBar(theme: theme)
+            .toolbar {
+                if AppNavigationService.shared.activeSection != nil {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button(action: {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                AppNavigationService.shared.activeSection = nil
+                            }
+                        }) {
+                            HStack(spacing: 3) {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 14, weight: .bold))
+                                Text("Home")
+                                    .font(.system(size: 15, weight: .bold))
+                            }
+                            .foregroundColor(theme.textPrimary)
+                        }
+                    }
+                }
+            }
             .onAppear {
                 startTitleAlternatingTimer()
                 Task {

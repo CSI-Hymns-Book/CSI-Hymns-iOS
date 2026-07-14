@@ -9,7 +9,13 @@ public final class HymnsListViewModel {
     public var selectedOrder: OrderMode = .number
     public var hymns: [Hymn] = []
     public var isLoading = false
-    public var isKeerthanes = false
+    public enum AppSection {
+        case hymns
+        case keerthanes
+        case mt
+    }
+    
+    public var section: AppSection
     
     public enum OrderMode: String, CaseIterable, Identifiable {
         case number = "Number"
@@ -19,15 +25,15 @@ public final class HymnsListViewModel {
     }
     
     public var availableOrderModes: [OrderMode] {
-        if isKeerthanes {
+        if section == .keerthanes {
             return [.number, .alphabetical]
         } else {
             return [.number, .meter]
         }
     }
     
-    public init(isKeerthanes: Bool = false) {
-        self.isKeerthanes = isKeerthanes
+    public init(section: AppSection = .hymns) {
+        self.section = section
         Task {
             await loadSongs()
         }
@@ -39,9 +45,17 @@ public final class HymnsListViewModel {
             self.isLoading = true
         }
         
-        let urlString = isKeerthanes
-            ? "https://raw.githubusercontent.com/Reynold29/csi-hymns-vault/main/keerthane_data.json"
-            : "https://raw.githubusercontent.com/Reynold29/csi-hymns-vault/main/hymns_data.json"
+        let urlString: String
+        switch section {
+        case .keerthanes:
+            urlString = "https://raw.githubusercontent.com/Reynold29/csi-hymns-vault/main/keerthane_data.json"
+        case .mt:
+            // Assuming MT will eventually be hosted, but for now we'll use a placeholder or local asset.
+            // Using a dummy URL to let network fail and fallback to bundled asset.
+            urlString = "https://raw.githubusercontent.com/Reynold29/csi-hymns-vault/main/mangalore_hymns_data.json"
+        case .hymns:
+            urlString = "https://raw.githubusercontent.com/Reynold29/csi-hymns-vault/main/hymns_data.json"
+        }
         
         guard let url = URL(string: urlString) else {
             await MainActor.run {
@@ -52,13 +66,24 @@ public final class HymnsListViewModel {
         
         let fileManager = FileManager.default
         let cacheDirectory = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
-        let cacheFileUrl = cacheDirectory.appendingPathComponent(isKeerthanes ? "keerthane_data_cache.json" : "hymn_data_cache.json")
+        let cacheFileName: String
+        switch section {
+        case .keerthanes: cacheFileName = "keerthane_data_cache.json"
+        case .mt: cacheFileName = "mangalore_data_cache.json"
+        case .hymns: cacheFileName = "hymn_data_cache.json"
+        }
+        let cacheFileUrl = cacheDirectory.appendingPathComponent(cacheFileName)
         
         do {
             let (data, response) = try await URLSession.shared.data(for: URLRequest(url: url))
             if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
                 let decoded = try JSONDecoder().decode([Hymn].self, from: data)
-                let typeStr = isKeerthanes ? "keerthane" : "hymn"
+                let typeStr: String
+                switch section {
+                case .keerthanes: typeStr = "keerthane"
+                case .mt: typeStr = "mt"
+                case .hymns: typeStr = "hymn"
+                }
                 let mapped = decoded.map { hymn in
                     var u = hymn
                     u.type = typeStr
@@ -81,9 +106,15 @@ public final class HymnsListViewModel {
         
         // Offline Cache Fallback
         if fileManager.fileExists(atPath: cacheFileUrl.path),
-           let cachedData = try? Data(contentsOf: cacheFileUrl),
-           let decoded = try? JSONDecoder().decode([Hymn].self, from: cachedData) {
-            let typeStr = isKeerthanes ? "keerthane" : "hymn"
+           let cachedData = try? Data(contentsOf: cacheFileUrl) {
+            do {
+                let decoded = try JSONDecoder().decode([Hymn].self, from: cachedData)
+            let typeStr: String
+            switch section {
+            case .keerthanes: typeStr = "keerthane"
+            case .mt: typeStr = "mt"
+            case .hymns: typeStr = "hymn"
+            }
             let mapped = decoded.map { hymn in
                 var u = hymn
                 u.type = typeStr
@@ -94,14 +125,28 @@ public final class HymnsListViewModel {
                 self.isLoading = false
             }
             print("HymnsListViewModel: Loaded songs from offline cache.")
-            return
+            } catch {
+                print("HymnsListViewModel: Offline cache JSON decoding failed: \(error)")
+            }
         }
         
         // 2. Offline Compiled Asset Fallback (Premium, real production data!)
-        let assetName = isKeerthanes ? "keerthane_data" : "hymns_data"
-        if let asset = NSDataAsset(name: assetName),
-           let decoded = try? JSONDecoder().decode([Hymn].self, from: asset.data) {
-            let typeStr = isKeerthanes ? "keerthane" : "hymn"
+        let assetName: String
+        switch section {
+        case .keerthanes: assetName = "keerthane_data"
+        case .mt: assetName = "mangalore_hymns_data"
+        case .hymns: assetName = "hymns_data"
+        }
+        
+        if let asset = NSDataAsset(name: assetName) {
+            do {
+                let decoded = try JSONDecoder().decode([Hymn].self, from: asset.data)
+            let typeStr: String
+            switch section {
+            case .keerthanes: typeStr = "keerthane"
+            case .mt: typeStr = "mt"
+            case .hymns: typeStr = "hymn"
+            }
             let mapped = decoded.map { hymn in
                 var u = hymn
                 u.type = typeStr
@@ -112,7 +157,9 @@ public final class HymnsListViewModel {
                 self.isLoading = false
             }
             print("HymnsListViewModel: Loaded songs from bundled NSDataAsset '\(assetName)'.")
-            return
+            } catch {
+                print("HymnsListViewModel: Bundled asset JSON decoding failed: \(error)")
+            }
         }
         
         // 3. Emergency empty state fallback
@@ -124,7 +171,12 @@ public final class HymnsListViewModel {
     
     /// Auto-refreshes lyrics from GitHub if last update was more than 3 days ago (Flutter parity).
     public func checkAndUpdateOnOpenIfNeeded() async {
-        let key = isKeerthanes ? "last_keerthane_update" : "last_lyrics_update"
+        let key: String
+        switch section {
+        case .keerthanes: key = "last_keerthane_update"
+        case .mt: key = "last_mt_update"
+        case .hymns: key = "last_lyrics_update"
+        }
         let last = UserDefaults.standard.object(forKey: key) as? TimeInterval ?? 0
         let interval: TimeInterval = 3 * 24 * 60 * 60
         guard Date().timeIntervalSince1970 - last >= interval else { return }
@@ -136,21 +188,38 @@ public final class HymnsListViewModel {
     /// Forces a remote refresh from the GitHub repository, updating the local cache.
     /// Returns true if successful.
     public func refreshSongs() async -> Bool {
-        let urlString = isKeerthanes
-            ? "https://raw.githubusercontent.com/Reynold29/csi-hymns-vault/main/keerthane_data.json"
-            : "https://raw.githubusercontent.com/Reynold29/csi-hymns-vault/main/hymns_data.json"
+        let urlString: String
+        switch section {
+        case .keerthanes:
+            urlString = "https://raw.githubusercontent.com/Reynold29/csi-hymns-vault/main/keerthane_data.json"
+        case .mt:
+            urlString = "https://raw.githubusercontent.com/Reynold29/csi-hymns-vault/main/mangalore_hymns_data.json"
+        case .hymns:
+            urlString = "https://raw.githubusercontent.com/Reynold29/csi-hymns-vault/main/hymns_data.json"
+        }
         
         guard let url = URL(string: urlString) else { return false }
         
         let fileManager = FileManager.default
         let cacheDirectory = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
-        let cacheFileUrl = cacheDirectory.appendingPathComponent(isKeerthanes ? "keerthane_data_cache.json" : "hymn_data_cache.json")
+        let cacheFileName: String
+        switch section {
+        case .keerthanes: cacheFileName = "keerthane_data_cache.json"
+        case .mt: cacheFileName = "mangalore_data_cache.json"
+        case .hymns: cacheFileName = "hymn_data_cache.json"
+        }
+        let cacheFileUrl = cacheDirectory.appendingPathComponent(cacheFileName)
         
         do {
             let (data, response) = try await URLSession.shared.data(for: URLRequest(url: url))
             if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
                 let decoded = try JSONDecoder().decode([Hymn].self, from: data)
-                let typeStr = isKeerthanes ? "keerthane" : "hymn"
+                let typeStr: String
+            switch section {
+            case .keerthanes: typeStr = "keerthane"
+            case .mt: typeStr = "mt"
+            case .hymns: typeStr = "hymn"
+            }
                 let mapped = decoded.map { hymn in
                     var u = hymn
                     u.type = typeStr
@@ -267,10 +336,10 @@ public struct HymnsListView: View {
         ChristmasModeService.shared.isChristmasTime ? 3 : 4
     }
     
-    public init(title: String = "CSI Hymns", isKeerthanes: Bool = false, selectedTab: Binding<Int>) {
+    public init(title: String = "CSI Hymns", section: HymnsListViewModel.AppSection = .hymns, selectedTab: Binding<Int>) {
         self.title = title
         self._selectedTab = selectedTab
-        self._viewModel = State(initialValue: HymnsListViewModel(isKeerthanes: isKeerthanes))
+        self._viewModel = State(initialValue: HymnsListViewModel(section: section))
     }
     
     public var body: some View {
@@ -311,9 +380,27 @@ public struct HymnsListView: View {
                 .csiGlassNavigationBar(theme: theme)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
-                        NavigationLink(destination: SettingsView()) {
-                            Image(systemName: "gearshape")
-                                .foregroundColor(theme.textPrimary)
+                        HStack(spacing: 12) {
+                            if AppNavigationService.shared.activeSection != nil {
+                                Button {
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                        AppNavigationService.shared.activeSection = nil
+                                    }
+                                } label: {
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "chevron.left")
+                                            .font(.system(size: 14, weight: .bold))
+                                        Text("Home")
+                                            .font(.system(size: 15, weight: .bold))
+                                    }
+                                    .foregroundColor(theme.textPrimary)
+                                }
+                            } else {
+                                NavigationLink(destination: SettingsView()) {
+                                    Image(systemName: "gearshape")
+                                        .foregroundColor(theme.textPrimary)
+                                }
+                            }
                         }
                     }
                     
@@ -530,7 +617,7 @@ public struct HymnsListView: View {
                         .frame(width: 46, height: 46)
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(theme.accentColor.opacity(0.25), lineWidth: 1))
                     
-                    Image(viewModel.isKeerthanes ? "keerthane" : "hymn")
+                    Image(viewModel.section == .keerthanes ? "keerthane" : "hymn")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 32, height: 32)

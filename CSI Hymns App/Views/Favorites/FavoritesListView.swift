@@ -10,7 +10,10 @@ public struct FavoritesListView: View {
     @State private var selectedCategory = 0 // 0 = Hymns, 1 = Keerthanes
     
     private var maxTab: Int {
-        ChristmasModeService.shared.isChristmasTime ? 3 : 4
+        if AppNavigationService.shared.activeSection == .mt {
+            return 2
+        }
+        return ChristmasModeService.shared.isChristmasTime ? 3 : 4
     }
     
     public init(selectedTab: Binding<Int>) {
@@ -20,8 +23,15 @@ public struct FavoritesListView: View {
     /// Filters favorites based on the active tab selection and query
     private var filteredFavorites: [Hymn] {
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let targetType = selectedCategory == 0 ? "hymn" : "keerthane"
-        let source = favoritesManager.favorites.filter { $0.type == targetType }
+        let activeSec = AppNavigationService.shared.activeSection ?? .csi
+        
+        let source: [Hymn]
+        if activeSec == .mt {
+            source = favoritesManager.favorites.filter { $0.type == "mt" }
+        } else {
+            let targetType = selectedCategory == 0 ? "hymn" : "keerthane"
+            source = favoritesManager.favorites.filter { $0.type == targetType }
+        }
         
         if query.isEmpty {
             return source
@@ -46,8 +56,10 @@ public struct FavoritesListView: View {
                 }
                 
                 VStack(spacing: 16) {
-                    // Glass Category Picker Segment
-                    pickerSegmentControl
+                    // Glass Category Picker Segment (Hidden for MT)
+                    if AppNavigationService.shared.activeSection != .mt {
+                        pickerSegmentControl
+                    }
                     
                     // Themed Search Bar
                     customSearchBar
@@ -64,6 +76,25 @@ public struct FavoritesListView: View {
             .navigationTitle("Favorites")
             .navigationBarTitleDisplayMode(.inline)
             .csiGlassNavigationBar(theme: theme)
+            .toolbar {
+                if AppNavigationService.shared.activeSection != nil {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                AppNavigationService.shared.activeSection = nil
+                            }
+                        } label: {
+                            HStack(spacing: 3) {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 14, weight: .bold))
+                                Text("Home")
+                                    .font(.system(size: 15, weight: .bold))
+                            }
+                            .foregroundColor(theme.textPrimary)
+                        }
+                    }
+                }
+            }
         }
     }
     

@@ -208,4 +208,175 @@ public actor JiraService {
             .execute()
         #endif
     }
+    
+    /// Syncs the status of a Jira ticket from Jira Cloud API to Supabase
+    public func syncTicketStatus(ticketKey: String) async {
+        let authString = "\(email):\(apiToken)"
+        guard let authData = authString.data(using: .utf8) else { return }
+        let base64Auth = authData.base64EncodedString()
+        
+        guard let url = URL(string: "\(jiraURLString)/rest/api/3/issue/\(ticketKey)") else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Basic \(base64Auth)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else { return }
+            
+            if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let fields = json["fields"] as? [String: Any],
+               let status = fields["status"] as? [String: Any],
+               let statusName = status["name"] as? String {
+                let statusId = status["id"] as? String
+                
+                #if canImport(Supabase)
+                let client = await MainActor.run { SupabaseService.instance.client }
+                
+                struct StatusUpdate: Encodable {
+                    let jira_status: String
+                    let jira_status_id: String?
+                }
+                
+                try await client.from("jira_tickets")
+                    .update(StatusUpdate(jira_status: statusName, jira_status_id: statusId))
+                    .eq("ticket_key", value: ticketKey)
+                    .execute()
+                #endif
+            }
+        } catch {
+            print("JiraService: syncTicketStatus failed for \(ticketKey): \(error)")
+        }
+    }
+    
+    /// Adds a comment to a Jira ticket
+    public func addComment(ticketKey: String, commentText: String) async -> Bool {
+        let authString = "\(email):\(apiToken)"
+        guard let authData = authString.data(using: .utf8) else { return false }
+        let base64Auth = authData.base64EncodedString()
+        
+        guard let url = URL(string: "\(jiraURLString)/rest/api/3/issue/\(ticketKey)/comment") else { return false }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Basic \(base64Auth)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        
+        let commentWithTag = "\(commentText)\n\n[via CSI iOS App]"
+        
+        let payload: [String: Any] = [
+            "body": [
+                "type": "doc",
+                "version": 1,
+                "content": [
+                    [
+                        "type": "paragraph",
+                        "content": [
+                            [
+                                "type": "text",
+                                "text": commentWithTag
+                            ]
+                        ]
+                    ]
+                ]
+            ]
+        ]
+        
+        do {
+            let jsonData = try JSONSerialization.data(withJSONObject: payload, options: [])
+            request.httpBody = jsonData
+            
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else { return false }
+            return httpResponse.statusCode == 201
+        } catch {
+            print("JiraService: addComment failed for \(ticketKey): \(error)")
+            return false
+        }
+    }
+    
+    /// Syncs comments from a Jira ticket to Supabase ticket_messages
+    public func syncTicketComments(ticketId: String, ticketKey: String) async {
+        let authString = "\(email):\(apiToken)"
+        guard let authData = authString.data(using: .utf8) else { return }
+        let base64Auth = authData.base64EncodedString()
+        
+        guard let url = URL(string: "\(jiraURLString)/rest/api/3/issue/\(ticketKey)/comment") else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Basic \(base64Auth)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else { return }
+            
+            if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let comments = json["comments"] as? [[String: Any]] {
+                
+                #if canImport(Supabase)
+                let client = await MainActor.run { SupabaseService.instance.client }
+                
+                for comment in comments {
+                    guard let bodyObj = comment["body"] as? [String: Any] else { continue }
+                    let text = parseJiraDocText(bodyObj)
+                    if text.isEmpty { continue }
+                    
+                    if text.contains("[via CSI iOS App]") || text.contains("[via CSI Android App]") {
+                        continue
+                    }
+                    
+                    // Check if it already exists
+                    let existing: [TicketMessage] = try await client.from("ticket_messages")
+                        .select()
+                        .eq("ticket_key", value: ticketKey)
+                        .eq("sender", value: "admin")
+                        .eq("message", value: text)
+                        .execute()
+                        .value
+                    
+                    if existing.isEmpty {
+                        struct InsertMessage: Encodable {
+                            let ticket_id: String
+                            let ticket_key: String
+                            let sender: String
+                            let message: String
+                        }
+                        
+                        let msg = InsertMessage(
+                            ticket_id: ticketId,
+                            ticket_key: ticketKey,
+                            sender: "admin",
+                            message: text
+                        )
+                        
+                        try await client.from("ticket_messages")
+                            .insert(msg)
+                            .execute()
+                    }
+                }
+                #endif
+            }
+        } catch {
+            print("JiraService: syncTicketComments failed for \(ticketKey): \(error)")
+        }
+    }
+    
+    private func parseJiraDocText(_ bodyObj: [String: Any]) -> String {
+        var result = ""
+        if let contentArray = bodyObj["content"] as? [[String: Any]] {
+            for block in contentArray {
+                if let innerContent = block["content"] as? [[String: Any]] {
+                    for leaf in innerContent {
+                        if let text = leaf["text"] as? String {
+                            result += text
+                        }
+                    }
+                    result += "\n"
+                }
+            }
+        }
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 }

@@ -14,23 +14,45 @@ struct CSIHymnsApp: App {
     @State private var forceUpdate: ForceUpdateDecision? = nil
     @State private var hasRequestedPushPermission = false
     
-    // Core release info matching 4.2.2-stable asset logs
-    private let activeRelease = ChangelogRelease(
-        title: "New Public Stable Version Released!",
-        version: "4.2.2-stable",
-        date: "20-04-2026",
-        changes: [
-            "Major improvements to Page Flip readability and smoothness (reduced text bleed-through, safer transitions, and more stable gesture behavior)",
-            "iOS back navigation is now smoother across key flows, including improved swipe-back behavior for Order of Service reader screens",
-            "Order of Service reader bottom navigation now stays properly anchored at the bottom, with cleaner page content spacing",
-            "Modernized in-app feedback messages across the app with cleaner floating status toasts for refresh/sync/update actions",
-            "Refined Order of Service title grouping and reader headers for clearer section context while navigating pages",
-            "Added ticket correction acknowledgement dialog on app open for Jira requests that moved to Done/Resolved/Closed",
-            "Fixed audio plugin crash path by removing unused background audio service integration",
-            "Fixed crash when opening Settings from Page Flip hint snackbar action in hymn/keerthane/carol detail screens",
-            "General stability and runtime bug fixes across startup and ticket-status handling"
-        ]
-    )
+    // Core release info parsed dynamically from changelog.json
+    private var activeRelease: ChangelogRelease {
+        guard let url = Bundle.main.url(forResource: "changelog", withExtension: "json") else {
+            print("CSIHymnsApp: Error finding changelog.json in bundle")
+            return fallbackRelease()
+        }
+        
+        do {
+            let data = try Data(contentsOf: url)
+            let releases = try JSONDecoder().decode([ChangelogRelease].self, from: data)
+            
+            // Find the release matching the current app version
+            let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "5.1.0"
+            if let matched = releases.first(where: { $0.version == currentVersion }) {
+                return matched
+            }
+            return releases.first ?? fallbackRelease()
+        } catch let error as DecodingError {
+            print("CSIHymnsApp: DecodingError parsing changelog.json: \(error)")
+            return fallbackRelease()
+        } catch {
+            print("CSIHymnsApp: Error parsing changelog.json: \(error)")
+            return fallbackRelease()
+        }
+    }
+    
+    private func fallbackRelease() -> ChangelogRelease {
+        return ChangelogRelease(
+            title: "New Public Stable Version Released!",
+            version: "5.1.0",
+            date: "13-07-2026",
+            changes: [
+                "New Mangalore Tunes (M.T.) Hymns section",
+                "New MIDI Playback Engine with realistic instrument settings",
+                "Robust JSON parsing with safety nets",
+                "Admin Controls Dashboard with Supabase Sync"
+            ]
+        )
+    }
     
     init() {
         setupGlobalAppearances()

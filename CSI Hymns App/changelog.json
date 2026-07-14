@@ -1,0 +1,53 @@
+[
+    {
+        "title": "HOTFIXES + M.T. Hymns, MIDI Playback & Admin Tools ⛪🎶",
+        "version": "5.1.0",
+        "date": "12-07-2026",
+        "changes": [
+            "HOTFIX — Fix App Icon not displaying properly",
+            "HOTFIX 2 — Fix landscape layout with collapsible right-side controls panel and smooth slide animations",
+            "NEW Mangalore Tunes (M.T.) Hymns section — browse the full M.T. Hymns book with lyrics, categories, favorites, and search",
+            "NEW MIDI Playback Engine — listen to hymn tunes with realistic Pipe Organ sound right inside the app. Configurable instrument in Settings",
+            "NEW Section Selector Screen — choose between CSI Hymns & Keerthanes or M.T. Hymns with beautiful cards and Kannada subtitles (ಕನ್ನಡ ಸಂಗೀತಗಳು, ಕನ್ನಡ ಸಂಕೀರ್ತನೆಗಳು, ಆರಾಧನಾ ಕ್ರಮ)",
+            "NEW Hide/Show Controls toggle on Hymn Detail — collapse playback and action controls for distraction-free reading, persists across orientation changes and songs",
+            "Section selector icons now use the actual hymn and keerthane drawable assets instead of generic vector icons",
+            "General stability improvements, animation polish, and bug fixes across the app",
+            "Thank you for using CSI Hymns! Report any issues from the app or Settings"
+        ]
+    },
+    {
+        "title": "CSI Hymns — Native Android Rewrite",
+        "version": "5.0.0",
+        "date": "23-06-2026",
+        "changes": [
+            "Welcome to CSI Hymns built natively in Kotlin with Jetpack Compose — faster, smoother, and designed for modern Android",
+            "Same app; your favorites and account data continue to sync where signed in",
+            "NEW Themes throughout using Android's New Material 3 expressive theming engine",
+            "NEW church-first Community Christmas Carols — browse by church, view lyrics or in-app PDFs, contribute songs and PDFs when signed in — On Christmas Season",
+            "Improved in-app PDF viewer with smoother scrolling and a single loader",
+            "Refined Material 3 expressive UI — bottom tab bar, button groups, Christmas snow ambience, and readable text on light accent colors",
+            "Fixed favorites not updating across Hymns and detail screens",
+            "Smoother tab switching and lighter motion across the main app",
+            "General stability fixes and polish across hymns, keerthane, settings, and carols",
+            "Thank you for using CSI Hymns — report issues from the app if anything looks off after the update"
+        ]
+    },
+    {
+        "title": "New Public Stable Version Released!",
+        "version": "4.2.2-stable",
+        "date": "20-04-2026",
+        "changes": [
+            "Major improvements to Page Flip readability and smoothness (reduced text bleed-through, safer transitions, and more stable gesture behavior)",
+            "iOS back navigation is now smoother across key flows, including improved swipe-back behavior for Order of Service reader screens",
+            "Order of Service reader bottom navigation now stays properly anchored at the bottom, with cleaner page content spacing",
+            "Modernized in-app feedback messages across the app with cleaner floating status toasts for refresh/sync/update actions",
+            "Refined Order of Service title grouping and reader headers for clearer section context while navigating pages",
+            "Added ticket correction acknowledgement dialog on app open for Jira requests that moved to Done/Resolved/Closed",
+            "Android 15 edge-to-edge compatibility improvements in host activity and display cutout handling",
+            "Fixed audio plugin crash path by removing unused background audio service integration",
+            "Fixed crash when opening Settings from Page Flip hint snackbar action in hymn/keerthane/carol detail screens",
+            "General stability and runtime bug fixes across startup and ticket-status handling",
+            "For more info on changes, visit https://github.com/Reynold29/CSI-Hymns-and-Lyrics/commits/main/"
+        ]
+    }
+]
