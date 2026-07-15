@@ -163,29 +163,32 @@ public struct OrderOfServiceReaderView: View {
     }
     
     public var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [Color(hex: "0D1B2A"), Color(hex: "132237"), Color(hex: "0D1B2A")],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
-            
-            VStack(spacing: 0) {
-                if viewModel.isLoading {
-                    ProgressView()
-                        .tint(.white)
-                        .frame(maxHeight: .infinity)
-                } else if viewModel.pages.isEmpty {
-                    emptyStateView
-                } else if !hasSelectedPage {
-                    homeHubView
-                } else {
-                    liturgyPagingController
-                }
+        GeometryReader { geometry in
+            let isLandscape = geometry.size.width > geometry.size.height
+            ZStack {
+                LinearGradient(
+                    colors: [Color(hex: "0D1B2A"), Color(hex: "132237"), Color(hex: "0D1B2A")],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea()
                 
-                if !viewModel.isLoading && !viewModel.pages.isEmpty {
-                    bottomControlPanel
+                VStack(spacing: 0) {
+                    if viewModel.isLoading {
+                        ProgressView()
+                            .tint(.white)
+                            .frame(maxHeight: .infinity)
+                    } else if viewModel.pages.isEmpty {
+                        emptyStateView
+                    } else if !hasSelectedPage {
+                        homeHubView(isLandscape: isLandscape)
+                    } else {
+                        liturgyPagingController(isLandscape: isLandscape)
+                    }
+                    
+                    if !viewModel.isLoading && !viewModel.pages.isEmpty {
+                        bottomControlPanel(isLandscape: isLandscape)
+                    }
                 }
             }
         }
@@ -224,69 +227,77 @@ public struct OrderOfServiceReaderView: View {
         return title.isEmpty ? englishHeader : title
     }
     
-    private var homeHubView: some View {
-        VStack(spacing: 20) {
-            Spacer()
-            
-            Text(type == "festival" ? "Habbada Aaradhana Krama" : "Huduvada Aaradhana Krama")
-                .font(.system(size: 24, weight: .black))
-                .foregroundColor(.white)
-                .multilineTextAlignment(.center)
-            
-            Text("Enter a page number to jump directly to that page")
-                .font(.system(size: 14))
-                .foregroundColor(.white.opacity(0.7))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
-            
-            HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.white.opacity(0.5))
-                TextField("Jump to page number (e.g., 1, 98, 100)", text: $jumpPageText)
-                    .keyboardType(.numberPad)
+    private func homeHubView(isLandscape: Bool) -> some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: isLandscape ? 12 : 20) {
+                Spacer(minLength: isLandscape ? 10 : 20)
+                
+                Text(type == "festival" ? "Habbada Aaradhana Krama" : "Huduvada Aaradhana Krama")
+                    .font(.system(size: isLandscape ? 20 : 24, weight: .black))
                     .foregroundColor(.white)
-                    .submitLabel(.go)
-                    .onSubmit { submitJump() }
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 14)
-            .background(Color.white.opacity(0.08))
-            .cornerRadius(28)
-            .overlay(RoundedRectangle(cornerRadius: 28).stroke(Color.white.opacity(0.12), lineWidth: 1))
-            .padding(.horizontal, 24)
-            
-            Button {
-                submitJump()
-            } label: {
-                Text("Go to Page")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(.black)
-                    .frame(maxWidth: 280)
-                    .padding(.vertical, 14)
-                    .background(Color.white)
-                    .cornerRadius(28)
-            }
-            .disabled(jumpPageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .opacity(jumpPageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1)
-            
-            Button {
-                withAnimation { hasSelectedPage = true }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "book.fill")
-                    Text("Open Full Book")
+                    .multilineTextAlignment(.center)
+                
+                Text("Enter a page number to jump directly to that page")
+                    .font(.system(size: 13))
+                    .foregroundColor(.white.opacity(0.7))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+                
+                HStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.white.opacity(0.5))
+                    TextField("Jump to page number (e.g., 1, 98, 100)", text: $jumpPageText)
+                        .keyboardType(.numberPad)
+                        .foregroundColor(.white)
+                        .submitLabel(.go)
+                        .onSubmit { submitJump() }
                 }
-                .font(.system(size: 16, weight: .heavy))
-                .foregroundColor(.white)
-                .frame(maxWidth: 280)
-                .padding(.vertical, 16)
-                .background(Color.white.opacity(0.12))
+                .padding(.horizontal, 18)
+                .padding(.vertical, isLandscape ? 10 : 14)
+                .background(Color.white.opacity(0.08))
                 .cornerRadius(28)
-                .overlay(RoundedRectangle(cornerRadius: 28).stroke(Color.white.opacity(0.2), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 28).stroke(Color.white.opacity(0.12), lineWidth: 1))
+                .padding(.horizontal, isLandscape ? 60 : 24)
+                
+                HStack(spacing: 16) {
+                    Button {
+                        submitJump()
+                    } label: {
+                        Text("Go to Page")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(Color.white)
+                            .cornerRadius(28)
+                    }
+                    .disabled(jumpPageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .opacity(jumpPageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1)
+                    
+                    Button {
+                        withAnimation { hasSelectedPage = true }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "book.fill")
+                            Text("Open Full Book")
+                        }
+                        .font(.system(size: 14, weight: .heavy))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.white.opacity(0.12))
+                        .cornerRadius(28)
+                        .overlay(RoundedRectangle(cornerRadius: 28).stroke(Color.white.opacity(0.2), lineWidth: 1))
+                    }
+                }
+                .padding(.horizontal, isLandscape ? 60 : 24)
+                .padding(.top, 4)
+                
+                Spacer(minLength: isLandscape ? 10 : 20)
             }
-            .padding(.top, 4)
-            
-            Spacer()
+            .frame(maxWidth: isLandscape ? 640 : .infinity)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.vertical, 16)
         }
     }
     
@@ -318,17 +329,17 @@ public struct OrderOfServiceReaderView: View {
         .frame(maxHeight: .infinity)
     }
     
-    private var liturgyPagingController: some View {
+    private func liturgyPagingController(isLandscape: Bool) -> some View {
         TabView(selection: $viewModel.currentPageIndex) {
             ForEach(0..<viewModel.pages.count, id: \.self) { index in
-                liturgyPageView(viewModel.pages[index])
+                liturgyPageView(viewModel.pages[index], isLandscape: isLandscape)
                     .tag(index)
             }
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
     }
     
-    private func liturgyPageView(_ page: OrderPage) -> some View {
+    private func liturgyPageView(_ page: OrderPage, isLandscape: Bool) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 // Section Title header card if present
@@ -358,84 +369,155 @@ public struct OrderOfServiceReaderView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 4)
             }
-            .padding(.horizontal, 24)
+            .frame(maxWidth: isLandscape ? 680 : .infinity)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.horizontal, isLandscape ? 36 : 24)
             .padding(.top, 20)
             .padding(.bottom, 30)
         }
     }
     
-    private var bottomControlPanel: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 8) {
-                Button { isShowingIndexSheet = true } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "list.bullet.rectangle.portrait")
-                        Text(hasSelectedPage ? "Page \(viewModel.pages[viewModel.currentPageIndex].pageNo)" : "All pages")
+    private func bottomControlPanel(isLandscape: Bool) -> some View {
+        VStack(spacing: 0) {
+            if isLandscape {
+                HStack(spacing: 12) {
+                    if hasSelectedPage {
+                        Button {
+                            withAnimation { viewModel.currentPageIndex = max(0, viewModel.currentPageIndex - 1) }
+                        } label: {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(viewModel.currentPageIndex > 0 ? .white : .white.opacity(0.25))
+                                .frame(width: 32, height: 32)
+                        }
+                        .disabled(viewModel.currentPageIndex == 0)
                     }
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color.white.opacity(0.1))
-                    .cornerRadius(8)
-                }
-                
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(viewModel.visiblePageNumbers, id: \.self) { no in
-                            let isCurrent = hasSelectedPage && viewModel.pages[viewModel.currentPageIndex].pageNo == no
-                            Button {
-                                viewModel.jumpToPageNo(no)
-                                withAnimation { hasSelectedPage = true }
-                            } label: {
-                                Text("\(no)")
-                                    .font(.system(size: 13, weight: .bold))
-                                    .foregroundColor(isCurrent ? .black : .white)
-                                    .frame(width: 32, height: 32)
-                                    .background(isCurrent ? Color.white : Color.white.opacity(0.08))
-                                    .cornerRadius(6)
-                                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(isCurrent ? 0.4 : 0.1), lineWidth: 1))
+                    
+                    Button { isShowingIndexSheet = true } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "list.bullet.rectangle.portrait")
+                            Text(hasSelectedPage ? "P.\(viewModel.pages[viewModel.currentPageIndex].pageNo)" : "Index")
+                        }
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(Color.white.opacity(0.1))
+                        .cornerRadius(6)
+                    }
+                    
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(viewModel.visiblePageNumbers, id: \.self) { no in
+                                let isCurrent = hasSelectedPage && viewModel.pages[viewModel.currentPageIndex].pageNo == no
+                                Button {
+                                    viewModel.jumpToPageNo(no)
+                                    withAnimation { hasSelectedPage = true }
+                                } label: {
+                                    Text("\(no)")
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundColor(isCurrent ? .black : .white)
+                                        .frame(width: 28, height: 28)
+                                        .background(isCurrent ? Color.white : Color.white.opacity(0.08))
+                                        .cornerRadius(6)
+                                }
                             }
                         }
                     }
-                }
-            }
-            .padding(.horizontal, 16)
-            
-            if hasSelectedPage {
-                HStack {
-                    Button {
-                        withAnimation { viewModel.currentPageIndex = max(0, viewModel.currentPageIndex - 1) }
-                    } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundColor(viewModel.currentPageIndex > 0 ? .white : .white.opacity(0.25))
-                            .padding(12)
+                    
+                    if hasSelectedPage {
+                        Text("\(viewModel.pages[viewModel.currentPageIndex].pageNo)/\(viewModel.pages.last?.pageNo ?? 0)")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.white.opacity(0.6))
+                            .padding(.horizontal, 4)
+                        
+                        Button {
+                            withAnimation { viewModel.currentPageIndex = min(viewModel.pages.count - 1, viewModel.currentPageIndex + 1) }
+                        } label: {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(viewModel.currentPageIndex < viewModel.pages.count - 1 ? .white : .white.opacity(0.25))
+                                .frame(width: 32, height: 32)
+                        }
+                        .disabled(viewModel.currentPageIndex == viewModel.pages.count - 1)
                     }
-                    .disabled(viewModel.currentPageIndex == 0)
-                    
-                    Spacer()
-                    
-                    Text("Page \(viewModel.pages[viewModel.currentPageIndex].pageNo) of \(viewModel.pages.last?.pageNo ?? 0)")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.white.opacity(0.6))
-                    
-                    Spacer()
-                    
-                    Button {
-                        withAnimation { viewModel.currentPageIndex = min(viewModel.pages.count - 1, viewModel.currentPageIndex + 1) }
-                    } label: {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundColor(viewModel.currentPageIndex < viewModel.pages.count - 1 ? .white : .white.opacity(0.25))
-                            .padding(12)
-                    }
-                    .disabled(viewModel.currentPageIndex == viewModel.pages.count - 1)
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+            } else {
+                VStack(spacing: 12) {
+                    HStack(spacing: 8) {
+                        Button { isShowingIndexSheet = true } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "list.bullet.rectangle.portrait")
+                                Text(hasSelectedPage ? "Page \(viewModel.pages[viewModel.currentPageIndex].pageNo)" : "All pages")
+                            }
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color.white.opacity(0.1))
+                            .cornerRadius(8)
+                        }
+                        
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(viewModel.visiblePageNumbers, id: \.self) { no in
+                                    let isCurrent = hasSelectedPage && viewModel.pages[viewModel.currentPageIndex].pageNo == no
+                                    Button {
+                                        viewModel.jumpToPageNo(no)
+                                        withAnimation { hasSelectedPage = true }
+                                    } label: {
+                                        Text("\(no)")
+                                            .font(.system(size: 13, weight: .bold))
+                                            .foregroundColor(isCurrent ? .black : .white)
+                                            .frame(width: 32, height: 32)
+                                            .background(isCurrent ? Color.white : Color.white.opacity(0.08))
+                                            .cornerRadius(6)
+                                            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(isCurrent ? 0.4 : 0.1), lineWidth: 1))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    
+                    if hasSelectedPage {
+                        HStack {
+                            Button {
+                                withAnimation { viewModel.currentPageIndex = max(0, viewModel.currentPageIndex - 1) }
+                            } label: {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 20, weight: .bold))
+                                    .foregroundColor(viewModel.currentPageIndex > 0 ? .white : .white.opacity(0.25))
+                                    .padding(12)
+                            }
+                            .disabled(viewModel.currentPageIndex == 0)
+                            
+                            Spacer()
+                            
+                            Text("Page \(viewModel.pages[viewModel.currentPageIndex].pageNo) of \(viewModel.pages.last?.pageNo ?? 0)")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(.white.opacity(0.6))
+                            
+                            Spacer()
+                            
+                            Button {
+                                withAnimation { viewModel.currentPageIndex = min(viewModel.pages.count - 1, viewModel.currentPageIndex + 1) }
+                            } label: {
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 20, weight: .bold))
+                                    .foregroundColor(viewModel.currentPageIndex < viewModel.pages.count - 1 ? .white : .white.opacity(0.25))
+                                    .padding(12)
+                            }
+                            .disabled(viewModel.currentPageIndex == viewModel.pages.count - 1)
+                        }
+                        .padding(.horizontal, 20)
+                    }
+                }
+                .padding(.vertical, 12)
             }
         }
-        .padding(.vertical, 12)
         .background(Color(hex: "0D1B2A").opacity(0.95))
         .overlay(Rectangle().frame(height: 1).foregroundColor(Color.white.opacity(0.1)), alignment: .top)
     }
