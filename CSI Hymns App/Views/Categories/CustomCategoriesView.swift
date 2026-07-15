@@ -53,135 +53,141 @@ public struct CustomCategoriesView: View {
     
     public var body: some View {
         NavigationStack {
-            ZStack {
-                // Adaptive backgrounds
-                theme.backgroundColor
-                    .ignoresSafeArea()
+            GeometryReader { geometry in
+                let isLandscape = geometry.size.width > geometry.size.height
                 
-                if theme.activeTheme != .amoled {
-                    theme.backgroundGradient
+                ZStack {
+                    // Adaptive backgrounds
+                    theme.backgroundColor
                         .ignoresSafeArea()
-                }
-                
-                ScrollView {
-                    VStack(spacing: 28) {
-                        let activeSec = AppNavigationService.shared.activeSection ?? .csi
-                        
-                        // Header
-                        VStack(spacing: 8) {
-                            Text(activeSec == .mt ? "ವಿಷಯ ಸೂಚಿ" : "ವರ್ಗಗಳು")
-                                .font(.system(size: 32, weight: .black))
-                                .foregroundColor(theme.textPrimary)
-                                .multilineTextAlignment(.center)
+                    
+                    if theme.activeTheme != .amoled {
+                        theme.backgroundGradient
+                            .ignoresSafeArea()
+                    }
+                    
+                    ScrollView {
+                        VStack(spacing: 28) {
+                            let activeSec = AppNavigationService.shared.activeSection ?? .csi
                             
-                            Text(activeSec == .mt ? "Thematic Collections" : "Categories")
-                                .font(.system(size: 22, weight: .bold))
-                                .foregroundColor(theme.textSecondary)
-                                .multilineTextAlignment(.center)
-                        }
-                        .padding(.top, 24)
-                        
-                        if activeSec == .mt {
-                            // MT Dynamic Categories Section
-                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
-                                ForEach(mtCategoryItems) { item in
-                                    NavigationLink(destination: DynamicCategoryScreenView(categoryName: item.name, directHymnsList: item.hymns)) {
-                                        mtCategoryCard(item)
-                                    }
-                                    .buttonStyle(PlainButtonStyle())
-                                }
-                            }
-                            .padding(.horizontal, 16)
-                        } else {
-                            // CSI Static Sections
-                            // Guest slots badge
-                            guestSlotsView
-                            
-                            // SECTION 0: Liturgical seasons
-                            VStack(alignment: .leading, spacing: 14) {
-                                Text("LITURGICAL SEASONS")
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundColor(theme.textSecondary)
-                                    .padding(.horizontal, 16)
+                            // Header
+                            VStack(spacing: 8) {
+                                Text(activeSec == .mt ? "ವಿಷಯ ಸೂಚಿ" : "ವರ್ಗಗಳು")
+                                    .font(.system(size: 32, weight: .black))
+                                    .foregroundColor(theme.textPrimary)
+                                    .multilineTextAlignment(.center)
                                 
-                                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
-                                    ForEach(LiturgicalCategories.all) { category in
-                                        NavigationLink {
-                                            DynamicCategoryScreenView(
-                                                categoryName: category.title,
-                                                hymnNumbers: category.hymnNumbers,
-                                                keerthaneNumbers: category.keerthaneNumbers
-                                            )
-                                        } label: {
-                                            liturgicalCategoryCard(category)
-                                        }
-                                    }
-                                }
-                                .padding(.horizontal, 16)
-                            }
-                            
-                            // SECTION 1: Common Categories
-                            VStack(alignment: .leading, spacing: 14) {
-                                Text("COMMON CATEGORIES")
-                                    .font(.system(size: 12, weight: .bold))
+                                Text(activeSec == .mt ? "Thematic Collections" : "Categories")
+                                    .font(.system(size: 22, weight: .bold))
                                     .foregroundColor(theme.textSecondary)
-                                    .padding(.horizontal, 16)
-                                
+                                    .multilineTextAlignment(.center)
+                            }
+                            .padding(.top, 24)
+                            
+                            if activeSec == .mt {
+                                // MT Dynamic Categories Section
                                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
-                                    // Recent Songs Card
-                                    recentSongsCard
-                                    
-                                    ForEach(commonCategories) { item in
-                                        NavigationLink(destination: DynamicCategoryScreenView(categoryName: item.name, hymnNumbers: item.hymnNumbers, keerthaneNumbers: item.keerthaneNumbers)) {
-                                            commonCategoryCard(item)
+                                    ForEach(mtCategoryItems) { item in
+                                        NavigationLink(destination: DynamicCategoryScreenView(categoryName: item.name, directHymnsList: item.hymns)) {
+                                            mtCategoryCard(item)
                                         }
                                         .buttonStyle(PlainButtonStyle())
                                     }
                                 }
                                 .padding(.horizontal, 16)
-                            }
-                        }
-                        
-                        // SECTION 2: Custom Collections (Visible in both sections)
-                        VStack(alignment: .leading, spacing: 14) {
-                            HStack {
-                                Text("MY COLLECTIONS")
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundColor(theme.textSecondary)
+                            } else {
+                                // CSI Static Sections
+                                // Guest slots badge
+                                guestSlotsView
                                 
-                                Spacer()
+                                // SECTION 0: Liturgical seasons
+                                VStack(alignment: .leading, spacing: 14) {
+                                    Text("LITURGICAL SEASONS")
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundColor(theme.textSecondary)
+                                        .padding(.horizontal, 16)
+                                    
+                                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
+                                        ForEach(LiturgicalCategories.all) { category in
+                                            NavigationLink {
+                                                DynamicCategoryScreenView(
+                                                    categoryName: category.title,
+                                                    hymnNumbers: category.hymnNumbers,
+                                                    keerthaneNumbers: category.keerthaneNumbers
+                                                )
+                                            } label: {
+                                                liturgicalCategoryCard(category)
+                                            }
+                                        }
+                                    }
+                                    .padding(.horizontal, 16)
+                                }
                                 
-                                Button {
-                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                        viewModel.isShowingCreateDialog = true
+                                // SECTION 1: Common Categories
+                                VStack(alignment: .leading, spacing: 14) {
+                                    Text("COMMON CATEGORIES")
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundColor(theme.textSecondary)
+                                        .padding(.horizontal, 16)
+                                    
+                                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
+                                        // Recent Songs Card
+                                        recentSongsCard
+                                        
+                                        ForEach(commonCategories) { item in
+                                            NavigationLink(destination: DynamicCategoryScreenView(categoryName: item.name, hymnNumbers: item.hymnNumbers, keerthaneNumbers: item.keerthaneNumbers)) {
+                                                commonCategoryCard(item)
+                                            }
+                                            .buttonStyle(PlainButtonStyle())
+                                        }
                                     }
-                                } label: {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "plus.circle")
-                                        Text("Create")
-                                    }
-                                    .font(.system(size: 13, weight: .bold))
-                                    .foregroundColor(theme.accentColor)
+                                    .padding(.horizontal, 16)
                                 }
                             }
-                            .padding(.horizontal, 16)
                             
-                            if viewModel.categories.isEmpty {
-                                emptyCollectionsCard
-                                    .padding(.horizontal, 16)
-                            } else {
-                                customCollectionsGrid
-                                    .padding(.horizontal, 16)
+                            // SECTION 2: Custom Collections (Visible in both sections)
+                            VStack(alignment: .leading, spacing: 14) {
+                                HStack {
+                                    Text("MY COLLECTIONS")
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundColor(theme.textSecondary)
+                                    
+                                    Spacer()
+                                    
+                                    Button {
+                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                            viewModel.isShowingCreateDialog = true
+                                        }
+                                    } label: {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "plus.circle")
+                                            Text("Create")
+                                        }
+                                        .font(.system(size: 13, weight: .bold))
+                                        .foregroundColor(theme.accentColor)
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                                
+                                if viewModel.categories.isEmpty {
+                                    emptyCollectionsCard
+                                        .padding(.horizontal, 16)
+                                } else {
+                                    customCollectionsGrid
+                                        .padding(.horizontal, 16)
+                                }
                             }
+                            .padding(.bottom, 36)
                         }
-                        .padding(.bottom, 36)
+                        .frame(maxWidth: isLandscape ? 640 : .infinity)
+                        .frame(maxWidth: .infinity, alignment: .center)
                     }
-                }
-                .swipeToNavigate(selectedTab: $selectedTab, maxTab: maxTab)
-                
-                // Creation Overlay Dialog
-                if viewModel.isShowingCreateDialog {
-                    createCategoryOverlay
+                    .swipeToNavigate(selectedTab: $selectedTab, maxTab: maxTab)
+                    
+                    // Creation Overlay Dialog
+                    if viewModel.isShowingCreateDialog {
+                        createCategoryOverlay
+                    }
                 }
             }
             .navigationTitle("Categories")

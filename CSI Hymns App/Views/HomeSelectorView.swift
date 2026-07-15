@@ -15,141 +15,256 @@ public struct HomeSelectorView: View {
     
     public var body: some View {
         NavigationStack {
-            ZStack {
-                // Base background color
-                theme.backgroundColor.ignoresSafeArea()
+            GeometryReader { geometry in
+                let isLandscape = geometry.size.width > geometry.size.height
                 
-                // Animated Premium Ambient Glow Mesh
-                if theme.activeTheme != .amoled {
-                    ZStack {
-                        // Blob 1: Accent Color (Deep Blue/Indigo)
-                        Circle()
-                            .fill(theme.accentColor.opacity(0.18))
-                            .frame(width: 320, height: 320)
-                            .blur(radius: 70)
-                            .offset(x: animateBlob1 ? -90 : 90, y: animateBlob1 ? -150 : 150)
-                        
-                        // Blob 2: Orange/Warm Ambient Glow
-                        Circle()
-                            .fill(Color.orange.opacity(0.15))
-                            .frame(width: 280, height: 280)
-                            .blur(radius: 70)
-                            .offset(x: animateBlob2 ? 100 : -100, y: animateBlob2 ? 100 : -100)
-                    }
-                    .ignoresSafeArea()
-                }
-                
-                ScrollView {
-                    VStack(spacing: 32) {
-                        // Welcome Logo & Elegant Greeting
-                        VStack(spacing: 8) {
-                            // Glowing Emblem
-                            ZStack {
-                                Circle()
-                                    .fill(theme.accentColor.opacity(0.15))
-                                    .frame(width: 76, height: 76)
-                                    .blur(radius: 4)
-                                
-                                Circle()
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: [theme.accentColor, theme.accentColor.opacity(0.2)],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 1.5
-                                    )
-                                    .frame(width: 70, height: 70)
-                                    .background(Circle().fill(theme.cardBackground.opacity(0.6)))
-                                
-                                Image("app_logo")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 36, height: 36)
-                            }
-                            .padding(.bottom, 4)
+                ZStack {
+                    // Base background color
+                    theme.backgroundColor.ignoresSafeArea()
+                    
+                    // Animated Premium Ambient Glow Mesh
+                    if theme.activeTheme != .amoled {
+                        ZStack {
+                            // Blob 1: Accent Color (Deep Blue/Indigo)
+                            Circle()
+                                .fill(theme.accentColor.opacity(0.18))
+                                .frame(width: 320, height: 320)
+                                .blur(radius: 70)
+                                .offset(x: animateBlob1 ? -90 : 90, y: animateBlob1 ? -150 : 150)
                             
-                            Text("Choose Hymn Book")
-                                .font(.system(size: 30, weight: .black, design: .rounded))
-                                .foregroundColor(theme.textPrimary)
+                            // Blob 2: Orange/Warm Ambient Glow
+                            Circle()
+                                .fill(Color.orange.opacity(0.15))
+                                .frame(width: 280, height: 280)
+                                .blur(radius: 70)
+                                .offset(x: animateBlob2 ? 100 : -100, y: animateBlob2 ? 100 : -100)
+                        }
+                        .ignoresSafeArea()
+                    }
+                    
+                    if isLandscape {
+                        HStack(spacing: 32) {
+                            // Left Column: Welcome Logo & Elegant Greeting
+                            VStack(spacing: 12) {
+                                // Glowing Emblem
+                                ZStack {
+                                    Circle()
+                                        .fill(theme.accentColor.opacity(0.15))
+                                        .frame(width: 76, height: 76)
+                                        .blur(radius: 4)
+                                    
+                                    Circle()
+                                        .stroke(
+                                            LinearGradient(
+                                                colors: [theme.accentColor, theme.accentColor.opacity(0.2)],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            ),
+                                            lineWidth: 1.5
+                                        )
+                                        .frame(width: 70, height: 70)
+                                        .background(Circle().fill(theme.cardBackground.opacity(0.6)))
+                                    
+                                    Image("app_logo")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 36, height: 36)
+                                }
+                                .padding(.bottom, 4)
+                                
+                                Text("Choose Hymn Book")
+                                    .font(.system(size: 24, weight: .black, design: .rounded))
+                                    .foregroundColor(theme.textPrimary)
+                                
+                                Text("Select CSI Hymns and Mangalore Hymns")
+                                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                    .foregroundColor(theme.textSecondary)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 12)
+                            }
+                            .frame(width: 260)
+                            .padding(.leading, 24)
                             
-                            Text("Select CSI Hymns and Mangalore Hymns")
-                                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                                .foregroundColor(theme.textSecondary)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 24)
+                            // Right Column: Scrollable Categories
+                            ScrollView(showsIndicators: false) {
+                                VStack(spacing: 24) {
+                                    premiumSectionCard(title: "CSI Hymns & Keerthanes", color: theme.accentColor, iconName: "book.pages") {
+                                        VStack(spacing: 8) {
+                                            premiumSubItemRow(
+                                                title: "CSI Hymns",
+                                                subtitle: "ಕನ್ನಡ ಸಂಗೀತಗಳು",
+                                                assetName: "hymn",
+                                                glowColor: theme.accentColor
+                                            ) {
+                                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                                    navigationManager.activeSection = .csi
+                                                    selectedTab = 0
+                                                }
+                                            }
+                                            
+                                            Divider().background(theme.strokeColor.opacity(0.3))
+                                            
+                                            premiumSubItemRow(
+                                                title: "CSI Keerthanes",
+                                                subtitle: "ಕನ್ನಡ ಸಂಕೀರ್ತನೆಗಳು",
+                                                assetName: "keerthane",
+                                                glowColor: Color.teal
+                                            ) {
+                                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                                    navigationManager.activeSection = .csi
+                                                    selectedTab = 1
+                                                }
+                                            }
+                                            
+                                            Divider().background(theme.strokeColor.opacity(0.3))
+                                            
+                                            premiumSubItemRow(
+                                                title: "CSI Order of Service",
+                                                subtitle: "ಸಿ.ಎಸ್.ಐ. ಆರಾಧನಾ ಕ್ರಮ",
+                                                assetName: "order_of_service_book",
+                                                glowColor: Color.purple
+                                            ) {
+                                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                                    navigationManager.activeSection = .csi
+                                                    selectedTab = 2
+                                                }
+                                            }
+                                        }
+                                    }
+                                    
+                                    premiumSectionCard(title: "Mangalore Hymns", color: Color.orange, iconName: "bookmark") {
+                                        premiumSubItemRow(
+                                            title: "M.T. Hymns",
+                                            subtitle: "ಮಂಗಳೂರು ಕನ್ನಡ ಸಂಗೀತಗಳು",
+                                            assetName: "hymn",
+                                            glowColor: Color.orange
+                                        ) {
+                                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                                navigationManager.activeSection = .mt
+                                                selectedTab = 0
+                                            }
+                                        }
+                                    }
+                                }
+                                .padding(.vertical, 24)
+                                .padding(.trailing, 24)
+                            }
                         }
-                        .padding(.top, 28)
-                        
-                        // Section 1: CSI Hymns & Keerthanes
-                        premiumSectionCard(title: "CSI Hymns & Keerthanes", color: theme.accentColor, iconName: "book.pages") {
-                            VStack(spacing: 8) {
-                                premiumSubItemRow(
-                                    title: "CSI Hymns",
-                                    subtitle: "ಕನ್ನಡ ಸಂಗೀತಗಳು",
-                                    assetName: "hymn",
-                                    glowColor: theme.accentColor
-                                ) {
-                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                        navigationManager.activeSection = .csi
-                                        selectedTab = 0
+                    } else {
+                        // Portrait Layout
+                        ScrollView(showsIndicators: false) {
+                            VStack(spacing: 32) {
+                                // Welcome Logo & Elegant Greeting
+                                VStack(spacing: 8) {
+                                    // Glowing Emblem
+                                    ZStack {
+                                        Circle()
+                                            .fill(theme.accentColor.opacity(0.15))
+                                            .frame(width: 76, height: 76)
+                                            .blur(radius: 4)
+                                        
+                                        Circle()
+                                            .stroke(
+                                                LinearGradient(
+                                                    colors: [theme.accentColor, theme.accentColor.opacity(0.2)],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                ),
+                                                lineWidth: 1.5
+                                            )
+                                            .frame(width: 70, height: 70)
+                                            .background(Circle().fill(theme.cardBackground.opacity(0.6)))
+                                        
+                                        Image("app_logo")
+                                            .resizable()
+                                            .scaledToFit()
+                                            .frame(width: 36, height: 36)
+                                    }
+                                    .padding(.bottom, 4)
+                                    
+                                    Text("Choose Hymn Book")
+                                        .font(.system(size: 30, weight: .black, design: .rounded))
+                                        .foregroundColor(theme.textPrimary)
+                                    
+                                    Text("Select CSI Hymns and Mangalore Hymns")
+                                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                        .foregroundColor(theme.textSecondary)
+                                        .multilineTextAlignment(.center)
+                                        .padding(.horizontal, 24)
+                                }
+                                .padding(.top, 28)
+                                
+                                // Section 1: CSI Hymns & Keerthanes
+                                premiumSectionCard(title: "CSI Hymns & Keerthanes", color: theme.accentColor, iconName: "book.pages") {
+                                    VStack(spacing: 8) {
+                                        premiumSubItemRow(
+                                            title: "CSI Hymns",
+                                            subtitle: "ಕನ್ನಡ ಸಂಗೀತಗಳು",
+                                            assetName: "hymn",
+                                            glowColor: theme.accentColor
+                                        ) {
+                                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                                navigationManager.activeSection = .csi
+                                                selectedTab = 0
+                                            }
+                                        }
+                                        
+                                        Divider().background(theme.strokeColor.opacity(0.3))
+                                        
+                                        premiumSubItemRow(
+                                            title: "CSI Keerthanes",
+                                            subtitle: "ಕನ್ನಡ ಸಂಕೀರ್ತನೆಗಳು",
+                                            assetName: "keerthane",
+                                            glowColor: Color.teal
+                                        ) {
+                                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                                navigationManager.activeSection = .csi
+                                                selectedTab = 1
+                                            }
+                                        }
+                                        
+                                        Divider().background(theme.strokeColor.opacity(0.3))
+                                        
+                                        premiumSubItemRow(
+                                            title: "CSI Order of Service",
+                                            subtitle: "ಸಿ.ಎಸ್.ಐ. ಆರಾಧನಾ ಕ್ರಮ",
+                                            assetName: "order_of_service_book",
+                                            glowColor: Color.purple
+                                        ) {
+                                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                                navigationManager.activeSection = .csi
+                                                selectedTab = 2
+                                            }
+                                        }
                                     }
                                 }
                                 
-                                Divider().background(theme.strokeColor.opacity(0.3))
-                                
-                                premiumSubItemRow(
-                                    title: "CSI Keerthanes",
-                                    subtitle: "ಕನ್ನಡ ಸಂಕೀರ್ತನೆಗಳು",
-                                    assetName: "keerthane",
-                                    glowColor: Color.teal
-                                ) {
-                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                        navigationManager.activeSection = .csi
-                                        selectedTab = 1
-                                    }
-                                }
-                                
-                                Divider().background(theme.strokeColor.opacity(0.3))
-                                
-                                premiumSubItemRow(
-                                    title: "CSI Order of Service",
-                                    subtitle: "ಸಿ.ಎಸ್.ಐ. ಆರಾಧನಾ ಕ್ರಮ",
-                                    assetName: "order_of_service_book",
-                                    glowColor: Color.purple
-                                ) {
-                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                        navigationManager.activeSection = .csi
-                                        selectedTab = 2
+                                // Section 2: Mangalore Hymns
+                                premiumSectionCard(title: "Mangalore Hymns", color: Color.orange, iconName: "bookmark") {
+                                    premiumSubItemRow(
+                                        title: "M.T. Hymns",
+                                        subtitle: "ಮಂಗಳೂರು ಕನ್ನಡ ಸಂಗೀತಗಳು",
+                                        assetName: "hymn",
+                                        glowColor: Color.orange
+                                    ) {
+                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                            navigationManager.activeSection = .mt
+                                            selectedTab = 0
+                                        }
                                     }
                                 }
                             }
-                        }
-                        
-                        // Section 2: Mangalore Hymns
-                        premiumSectionCard(title: "Mangalore Hymns", color: Color.orange, iconName: "bookmark") {
-                            premiumSubItemRow(
-                                title: "M.T. Hymns",
-                                subtitle: "ಮಂಗಳೂರು ಕನ್ನಡ ಸಂಗೀತಗಳು",
-                                assetName: "hymn",
-                                glowColor: Color.orange
-                            ) {
-                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                    navigationManager.activeSection = .mt
-                                    selectedTab = 0
-                                }
-                            }
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 40)
                         }
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 40)
                 }
             }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .csiGlassNavigationBar(theme: theme)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .navigationBarLeading) {
                     NavigationLink(destination: SettingsView()) {
                         ZStack {
                             Circle()

@@ -52,14 +52,129 @@ public struct RootTabView: View {
                 )
             }
             
-            // Floating active announcement banner
+            // Centered active announcement dialog modal overlay
             if let ann = activeAnnouncement {
-                VStack {
-                    announcementCard(ann)
-                        .padding()
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                    Spacer()
+                ZStack {
+                    // Dimmed background
+                    Color.black.opacity(0.55)
+                        .ignoresSafeArea()
+                        .transition(.opacity)
+                    
+                    // Dialog Card
+                    VStack(spacing: 20) {
+                        // Header Info
+                        HStack(spacing: 16) {
+                            ZStack {
+                                Circle()
+                                    .fill(theme.accentColor.opacity(0.12))
+                                    .frame(width: 48, height: 48)
+                                    .overlay(Circle().stroke(theme.accentColor.opacity(0.35), lineWidth: 1))
+                                
+                                Text("📢")
+                                    .font(.system(size: 22))
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Announcement")
+                                    .font(.system(size: 17, weight: .bold))
+                                    .foregroundColor(theme.textPrimary)
+                                
+                                Text("Important Update")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(theme.textSecondary)
+                            }
+                            Spacer()
+                            
+                            Button {
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                    AnnouncementsService.shared.dismissBroadcast(id: ann.id)
+                                    activeAnnouncement = nil
+                                }
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(theme.textSecondary.opacity(0.7))
+                                    .font(.system(size: 22))
+                            }
+                        }
+                        
+                        // Image if available
+                        if let imgUrl = ann.imageUrl, let url = URL(string: imgUrl) {
+                            AsyncImage(url: url) { image in
+                                image.resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(maxHeight: 160)
+                                    .cornerRadius(12)
+                            } placeholder: {
+                                ProgressView().tint(theme.accentColor)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        
+                        // Announcement Title
+                        Text(ann.title)
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(theme.textPrimary)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                        
+                        // Message text
+                        ScrollView {
+                            Text(ann.displayMessage)
+                                .font(.system(size: 13.5))
+                                .foregroundColor(theme.textSecondary)
+                                .lineSpacing(4)
+                                .multilineTextAlignment(.leading)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .frame(maxHeight: 140)
+                        
+                        // Action button (if URL exists)
+                        if let actText = ann.actionText, let actUrl = ann.actionUrl, let url = URL(string: actUrl) {
+                            Button {
+                                UIApplication.shared.open(url)
+                            } label: {
+                                Text(actText)
+                                    .font(.system(size: 15, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                                    .background(theme.accentColor)
+                                    .cornerRadius(12)
+                            }
+                        }
+                        
+                        // Dismiss Button
+                        Button {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                AnnouncementsService.shared.dismissBroadcast(id: ann.id)
+                                activeAnnouncement = nil
+                            }
+                        } label: {
+                            Text("Okay")
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundColor(theme.textPrimary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(theme.surfaceColor)
+                                .cornerRadius(12)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(theme.strokeColor, lineWidth: 1)
+                                )
+                        }
+                    }
+                    .padding(20)
+                    .background(theme.cardBackground)
+                    .cornerRadius(24)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 24)
+                            .stroke(theme.strokeColor, lineWidth: 1)
+                    )
+                    .padding(.horizontal, 30)
+                    .shadow(color: Color.black.opacity(0.25), radius: 15, y: 10)
+                    .transition(.scale.combined(with: .opacity))
                 }
+                .zIndex(100)
             }
         }
         .task {
@@ -74,70 +189,6 @@ public struct RootTabView: View {
     private func finishMenuShowcase() {
         isShowingMenuShowcase = false
         UserDefaults.standard.set(false, forKey: "csi_pending_menu_showcase")
-    }
-    
-    private func announcementCard(_ ann: InAppMessage) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("📢 Announcement")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(theme.accentColor)
-                Spacer()
-                Button {
-                    withAnimation {
-                        AnnouncementsService.shared.dismissBroadcast(id: ann.id)
-                        activeAnnouncement = nil
-                    }
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(theme.textSecondary.opacity(0.7))
-                        .font(.system(size: 18))
-                }
-            }
-            
-            Text(ann.title)
-                .font(.system(size: 15, weight: .bold))
-                .foregroundColor(theme.textPrimary)
-            
-            Text(ann.displayMessage)
-                .font(.system(size: 13))
-                .foregroundColor(theme.textSecondary)
-                .lineLimit(4)
-            
-            if let imgUrl = ann.imageUrl, let url = URL(string: imgUrl) {
-                AsyncImage(url: url) { image in
-                    image.resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(maxHeight: 120)
-                        .cornerRadius(8)
-                } placeholder: {
-                    ProgressView().tint(theme.accentColor)
-                }
-                .padding(.vertical, 4)
-            }
-            
-            if let actText = ann.actionText, let actUrl = ann.actionUrl, let url = URL(string: actUrl) {
-                Button {
-                    UIApplication.shared.open(url)
-                } label: {
-                    Text(actText)
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 6)
-                        .background(theme.accentColor)
-                        .cornerRadius(8)
-                }
-            }
-        }
-        .padding(14)
-        .background(theme.cardBackground)
-        .cornerRadius(16)
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(theme.cardStroke, lineWidth: 1.5)
-        )
-        .shadow(color: Color.black.opacity(0.15), radius: 10, y: 5)
     }
     
     @ViewBuilder
@@ -247,6 +298,14 @@ public struct SwipeNavigationModifier: ViewModifier {
                     .onEnded { value in
                         let horizontal = value.translation.width
                         let vertical = value.translation.height
+                        
+                        // 1. Edge swipe from left -> pop back to home selector
+                        if value.startLocation.x < 45 && horizontal > 70 {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                AppNavigationService.shared.activeSection = nil
+                            }
+                            return
+                        }
                         
                         // Ensure predominantly horizontal drag to prevent vertical scroll overrides
                         guard abs(horizontal) > abs(vertical) * 1.8 else { return }

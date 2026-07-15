@@ -961,6 +961,7 @@ struct EditAnnouncementView: View {
     @State private var selectedItem: PhotosPickerItem? = nil
     @State private var isUploadingImage = false
     @State private var uploadedImageUrl: String? = nil
+    @State private var isRetriggering = false
     
     @Environment(\.dismiss) private var dismiss
     
@@ -1028,11 +1029,31 @@ struct EditAnnouncementView: View {
                 .foregroundColor(.white)
                 
                 if announcement != nil {
+                    Button(action: {
+                        Task {
+                            await retriggerAnnouncement()
+                        }
+                    }) {
+                        if isRetriggering {
+                            ProgressView().tint(theme.accentColor)
+                        } else {
+                            HStack {
+                                Image(systemName: "bell.badge.fill")
+                                Text("Re-trigger Alert for All Users")
+                            }
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(theme.accentColor)
+                        }
+                    }
+                    .disabled(isRetriggering || isSaving)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    
                     Button("Delete Announcement", role: .destructive) {
                         Task {
                             await deleteAnnouncement()
                         }
                     }
+                    .disabled(isRetriggering || isSaving)
                     .frame(maxWidth: .infinity, alignment: .center)
                 }
             }
@@ -1125,6 +1146,30 @@ struct EditAnnouncementView: View {
                 self.successMsg = "Announcement deleted."
                 self.showSuccess = true
             }
+        }
+    }
+    
+    private func retriggerAnnouncement() async {
+        guard let ann = announcement else { return }
+        await MainActor.run {
+            self.isRetriggering = true
+        }
+        
+        let newId = UUID().uuidString.lowercased()
+        let err = await AnnouncementsService.shared.retriggerBroadcast(
+            oldId: ann.id,
+            newId: newId,
+            currentMessage: ann
+        )
+        
+        await MainActor.run {
+            self.isRetriggering = false
+            if let err = err {
+                self.successMsg = "Failed to re-trigger: \(err)"
+            } else {
+                self.successMsg = "Announcement re-triggered successfully for all users!"
+            }
+            self.showSuccess = true
         }
     }
 }

@@ -7,6 +7,7 @@ import OneSignalFramework
 @main
 struct CSIHymnsApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @Environment(\.scenePhase) private var scenePhase
     @State private var christmasMode = ChristmasModeService.shared
     @State private var themeManager = ThemeManager.shared
     @State private var isShowingWelcome = false
@@ -90,6 +91,11 @@ struct CSIHymnsApp: App {
                 await CastService.shared.initializeIfEnabled()
                 await PageFlipVisibilityService.shared.refresh()
                 try? await ChristmasCarolsService.shared.fetchParishCarols(forceGitHub: true)
+            }
+            .onChange(of: scenePhase) { newPhase in
+                if newPhase == .background {
+                    BackgroundSyncService.shared.performBackgroundSync()
+                }
             }
         }
     }

@@ -45,34 +45,52 @@ public struct FavoritesListView: View {
     
     public var body: some View {
         NavigationStack {
-            ZStack {
-                // Adaptive theme background
-                theme.backgroundColor
-                    .ignoresSafeArea()
+            GeometryReader { geometry in
+                let isLandscape = geometry.size.width > geometry.size.height
                 
-                if theme.activeTheme != .amoled {
-                    theme.backgroundGradient
+                ZStack {
+                    // Adaptive theme background
+                    theme.backgroundColor
                         .ignoresSafeArea()
-                }
-                
-                VStack(spacing: 16) {
-                    // Glass Category Picker Segment (Hidden for MT)
-                    if AppNavigationService.shared.activeSection != .mt {
-                        pickerSegmentControl
+                    
+                    if theme.activeTheme != .amoled {
+                        theme.backgroundGradient
+                            .ignoresSafeArea()
                     }
                     
-                    // Themed Search Bar
-                    customSearchBar
-                    
-                    if filteredFavorites.isEmpty {
-                        emptyStateView
-                            .transition(.opacity)
-                    } else {
-                        favoritesScrollView
+                    VStack(spacing: 12) {
+                        if isLandscape {
+                            HStack(spacing: 16) {
+                                if AppNavigationService.shared.activeSection != .mt {
+                                    pickerSegmentControl
+                                        .frame(maxWidth: 320)
+                                }
+                                customSearchBar
+                            }
+                            .padding(.top, 4)
+                        } else {
+                            // Glass Category Picker Segment (Hidden for MT)
+                            if AppNavigationService.shared.activeSection != .mt {
+                                pickerSegmentControl
+                            }
+                            
+                            // Themed Search Bar
+                            customSearchBar
+                        }
+                        
+                        if filteredFavorites.isEmpty {
+                            emptyStateView
+                                .transition(.opacity)
+                        } else {
+                            favoritesScrollView
+                        }
                     }
+                    .padding(.horizontal)
+                    .frame(maxWidth: isLandscape ? 640 : .infinity)
+                    .frame(maxWidth: .infinity, alignment: .center)
                 }
-                .padding(.horizontal)
             }
+            .ignoresSafeArea(.keyboard, edges: .bottom)
             .navigationTitle("Favorites")
             .navigationBarTitleDisplayMode(.inline)
             .csiGlassNavigationBar(theme: theme)
@@ -88,7 +106,7 @@ public struct FavoritesListView: View {
                                 Image(systemName: "chevron.left")
                                     .font(.system(size: 14, weight: .bold))
                                 Text("Home")
-                                    .font(.system(size: 15, weight: .bold))
+                                        .font(.system(size: 15, weight: .bold))
                             }
                             .foregroundColor(theme.textPrimary)
                         }
@@ -222,7 +240,7 @@ public struct FavoritesListView: View {
                     .foregroundColor(theme.textPrimary)
                 
                 if !song.signature.isEmpty {
-                    Text(song.signature)
+                    Text(song.type == "mt" ? "M.T. \(song.signature)" : song.signature)
                         .font(.system(size: 11))
                         .foregroundColor(theme.textSecondary)
                         .padding(.horizontal, 6)

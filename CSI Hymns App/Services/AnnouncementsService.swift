@@ -142,6 +142,48 @@ public final class AnnouncementsService: Sendable {
         #endif
     }
     
+    public func retriggerBroadcast(oldId: String, newId: String, currentMessage: InAppMessage) async -> String? {
+        #if canImport(Supabase)
+        do {
+            struct InsertRow: Encodable {
+                let id: String
+                let title: String
+                let message: String
+                let action_text: String?
+                let action_url: String?
+                let is_active: Bool
+            }
+            
+            let client = SupabaseService.instance.client
+            
+            // 1. Delete the old broadcast from database
+            try await client.from("in_app_messages")
+                .delete()
+                .eq("id", value: oldId)
+                .execute()
+                
+            // 2. Insert the updated copy with newId and current time
+            let payload = InsertRow(
+                id: newId,
+                title: currentMessage.title,
+                message: currentMessage.message,
+                action_text: currentMessage.actionText,
+                action_url: currentMessage.actionUrl,
+                is_active: currentMessage.isActive
+            )
+            try await client.from("in_app_messages")
+                .insert(payload)
+                .execute()
+                
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+        #else
+        return "Supabase client not available"
+        #endif
+    }
+    
     public func uploadAnnouncementImage(fileName: String, data: Data) async throws -> String {
         #if canImport(Supabase)
         let client = SupabaseService.instance.client

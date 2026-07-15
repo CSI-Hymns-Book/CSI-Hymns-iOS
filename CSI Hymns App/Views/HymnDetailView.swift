@@ -85,6 +85,7 @@ public struct HymnDetailView: View {
     @State private var tuneOptions: [String] = []
     @State private var selectedTune: String? = nil
     @State private var isShowingAdvancedMidi = false
+    @State private var isViewReady = false
     
     public init(hymn: Hymn) {
         self.hymn = hymn
@@ -92,110 +93,214 @@ public struct HymnDetailView: View {
     
     public var body: some View {
         @Bindable var viewModel = viewModel
-        ZStack {
-            // Adaptive theme background
-            theme.backgroundColor
-                .ignoresSafeArea()
+        GeometryReader { geometry in
+            let isLandscape = geometry.size.width > geometry.size.height
             
-            if theme.activeTheme != .amoled {
-                theme.backgroundGradient
+            ZStack {
+                // Adaptive theme background
+                theme.backgroundColor
                     .ignoresSafeArea()
-            }
-            
-            VStack(spacing: 0) {
-                // Header Panel: Bilingual Toggles, Zoom controls & Audio toggle
-                if !isHidden {
-                    headerPanel
-                        .padding(.horizontal)
-                        .padding(.top, 10)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                    
-                    Divider()
-                        .background(theme.strokeColor)
-                        .padding(.vertical, 8)
-                        .transition(.opacity)
-                    
-                    // Elegant metadata header card
-                    metadataHeaderCard
-                        .padding(.bottom, 8)
-                        .transition(.move(edge: .top).combined(with: .opacity))
+                
+                if theme.activeTheme != .amoled {
+                    theme.backgroundGradient
+                        .ignoresSafeArea()
                 }
                 
-                // Lyrics: page-flip when enabled in Settings, otherwise continuous scroll.
-                if usePageSwipe && pageFlipVisibility.isVisible {
-                    pageFlipLyricsContainer
+                if isLandscape {
+                    HStack(spacing: 0) {
+                        // Left Column: Lyrics (always maximum space)
+                        VStack(spacing: 0) {
+                            if usePageSwipe && pageFlipVisibility.isVisible {
+                                pageFlipLyricsContainer
+                            } else {
+                                continuousLyricsContainer
+                            }
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .opacity(isViewReady ? 1.0 : 0.0)
+                        
+                        if !isHidden {
+                            // Split Divider
+                            Rectangle()
+                                .fill(theme.strokeColor)
+                                .frame(width: 1)
+                                .ignoresSafeArea(edges: .vertical)
+                            
+                            // Right Column: Controls and Audio Player
+                            ScrollView(showsIndicators: false) {
+                                VStack(spacing: 16) {
+                                    sidebarToolbarRow
+                                    
+                                    metadataHeaderCard
+                                    
+                                    sidebarSettingsPanel
+                                    
+                                    if isAudioPlayerVisible {
+                                        if hymn.type == "mt" {
+                                            glassmorphicMidiPlayer(isEmbedded: true)
+                                        } else {
+                                            glassmorphicAudioPlayer(isEmbedded: true)
+                                        }
+                                    }
+                                }
+                                .padding(16)
+                            }
+                            .frame(width: 320)
+                            .background(
+                                Rectangle()
+                                    .fill(theme.surfaceColor.opacity(0.4))
+                                    .ignoresSafeArea(edges: [.vertical, .trailing])
+                            )
+                            .offset(x: isViewReady ? 0 : 30)
+                            .opacity(isViewReady ? 1.0 : 0.0)
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                        }
+                    }
+                    .animation(.spring(response: 0.45, dampingFraction: 0.82), value: isHidden)
                 } else {
-                    continuousLyricsContainer
+                    // Portrait Layout
+                    VStack(spacing: 0) {
+                        // Header Panel: Bilingual Toggles, Zoom controls & Audio toggle
+                        if !isHidden {
+                            headerPanel
+                                .padding(.horizontal)
+                                .padding(.top, 10)
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                            
+                            Divider()
+                                .background(theme.strokeColor)
+                                .padding(.vertical, 8)
+                                .transition(.opacity)
+                            
+                            // Elegant metadata header card
+                            metadataHeaderCard
+                                .padding(.bottom, 8)
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                        }
+                        
+                        // Lyrics: page-flip when enabled in Settings, otherwise continuous scroll.
+                        Group {
+                            if usePageSwipe && pageFlipVisibility.isVisible {
+                                pageFlipLyricsContainer
+                            } else {
+                                continuousLyricsContainer
+                            }
+                        }
+                        .opacity(isViewReady ? 1.0 : 0.0)
+                        .offset(y: isViewReady ? 0 : 15)
+                        
+                        // Integrated glassmorphic player
+                        if isAudioPlayerVisible && !isHidden {
+                            if hymn.type == "mt" {
+                                glassmorphicMidiPlayer(isEmbedded: false)
+                                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                            } else {
+                                glassmorphicAudioPlayer(isEmbedded: false)
+                                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                            }
+                        }
+                    }
+                    .animation(.spring(response: 0.45, dampingFraction: 0.82), value: isHidden)
                 }
-                
-                // Integrated glassmorphic player
-                if isAudioPlayerVisible && !isHidden {
-                    if hymn.type == "mt" {
-                        glassmorphicMidiPlayer
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
+            } // closes ZStack
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    if !isLandscape {
+                        HStack(spacing: 12) {
+                            Button {
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                    isHidden.toggle()
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: isHidden ? "eye" : "eye.slash")
+                                        .font(.system(size: 11, weight: .bold))
+                                    Text(isHidden ? "Show Actions" : "Hide Actions")
+                                        .font(.system(size: 11, weight: .bold))
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(theme.surfaceColor)
+                                .cornerRadius(8)
+                                .foregroundColor(theme.textPrimary)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(theme.strokeColor, lineWidth: 1)
+                                )
+                            }
+                            
+                            // Casting pickers (AirPlay always; Chromecast when remotely enabled)
+                            AirPlayRoutePicker()
+                                .frame(width: 28, height: 28)
+                            
+                            CastButton(tint: theme.textPrimary)
+                            
+                            // Issue reporter
+                            Button {
+                                viewModel.isShowingReportSheet = true
+                            } label: {
+                                Image(systemName: "exclamationmark.bubble")
+                                    .foregroundColor(theme.textPrimary)
+                            }
+                            
+                            // Heart-shaped toggle favorite buttons
+                            Button {
+                                let isFav = favoritesManager.isFavorite(songId: hymn.id)
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.5)) {
+                                    favoriteScale = 1.4
+                                    favoritesManager.toggleFavorite(song: hymn)
+                                }
+                                Task {
+                                    try? await Task.sleep(for: .seconds(0.15))
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.5)) {
+                                        favoriteScale = 1.0
+                                    }
+                                }
+                                PostHogService.shared.track(event: isFav ? "song_favorite_removed" : "song_favorite_added", properties: [
+                                    "song_id": hymn.id,
+                                    "song_number": hymn.number,
+                                    "song_type": hymn.type,
+                                    "song_title": hymn.title
+                                ])
+                            } label: {
+                                Image(systemName: favoritesManager.isFavorite(songId: hymn.id) ? "heart.fill" : "heart")
+                                    .foregroundColor(favoritesManager.isFavorite(songId: hymn.id) ? .red : theme.textPrimary)
+                                    .scaleEffect(favoriteScale)
+                            }
+                        }
                     } else {
-                        glassmorphicAudioPlayer
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                        if isHidden {
+                            Button {
+                                withAnimation(.spring()) {
+                                    isHidden.toggle()
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "eye")
+                                        .font(.system(size: 11, weight: .bold))
+                                    Text("Show Actions")
+                                        .font(.system(size: 11, weight: .bold))
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(theme.surfaceColor)
+                                .cornerRadius(8)
+                                .foregroundColor(theme.textPrimary)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(theme.strokeColor, lineWidth: 1)
+                                )
+                            }
+                        }
                     }
                 }
             }
-        }
+        } // closes GeometryReader
         .navigationTitle("\(hymn.type == "keerthane" ? "Keerthane" : "Hymn") \(hymn.number)")
         .navigationBarTitleDisplayMode(.inline)
         .csiGlassNavigationBar(theme: theme)
         // Immersive reading navbar auto-hide behavior
         .toolbar(.hidden, for: .tabBar)
-        .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                Button {
-                    withAnimation(.spring()) {
-                        isHidden.toggle()
-                    }
-                } label: {
-                    Image(systemName: isHidden ? "eye.slash" : "eye")
-                        .foregroundColor(theme.textPrimary)
-                }
-                
-                // Casting pickers (AirPlay always; Chromecast when remotely enabled)
-                AirPlayRoutePicker()
-                    .frame(width: 28, height: 28)
-                
-                CastButton(tint: theme.textPrimary)
-                
-                // Issue reporter
-                Button {
-                    viewModel.isShowingReportSheet = true
-                } label: {
-                    Image(systemName: "exclamationmark.bubble")
-                        .foregroundColor(theme.textPrimary)
-                }
-                
-                // Heart-shaped toggle favorite buttons
-                Button {
-                    let isFav = favoritesManager.isFavorite(songId: hymn.id)
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.5)) {
-                        favoriteScale = 1.4
-                        favoritesManager.toggleFavorite(song: hymn)
-                    }
-                    Task {
-                        try? await Task.sleep(for: .seconds(0.15))
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.5)) {
-                            favoriteScale = 1.0
-                        }
-                    }
-                    PostHogService.shared.track(event: isFav ? "song_favorite_removed" : "song_favorite_added", properties: [
-                        "song_id": hymn.id,
-                        "song_number": hymn.number,
-                        "song_type": hymn.type,
-                        "song_title": hymn.title
-                    ])
-                } label: {
-                    Image(systemName: favoritesManager.isFavorite(songId: hymn.id) ? "heart.fill" : "heart")
-                        .foregroundColor(favoritesManager.isFavorite(songId: hymn.id) ? .red : theme.textPrimary)
-                        .scaleEffect(favoriteScale)
-                }
-            }
-        }
         .sheet(isPresented: $viewModel.isShowingReportSheet) {
             reportLyricsSheet
         }
@@ -216,6 +321,9 @@ public struct HymnDetailView: View {
                 "song_signature": hymn.signature,
                 "initial_language": viewModel.selectedLanguage.rawValue
             ])
+            withAnimation(.spring(response: 0.55, dampingFraction: 0.8)) {
+                isViewReady = true
+            }
         }
         .onDisappear {
             ReadingProgressService.save(
@@ -266,7 +374,201 @@ public struct HymnDetailView: View {
         }
     }
     
-    // MARK: - Subviews
+    private var sidebarSettingsPanel: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Text("Lyrics Options")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(theme.textPrimary)
+                Spacer()
+            }
+            
+            HStack(spacing: 12) {
+                // Font Size
+                HStack(spacing: 8) {
+                    Button {
+                        let impact = UIImpactFeedbackGenerator(style: .light)
+                        impact.impactOccurred()
+                        viewModel.fontSize = max(14, viewModel.fontSize - 2)
+                    } label: {
+                        Image(systemName: "minus.circle")
+                            .font(.system(size: 16))
+                            .foregroundColor(theme.textPrimary.opacity(0.8))
+                    }
+                    
+                    Text("\(Int(viewModel.fontSize))")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(theme.textPrimary)
+                        .frame(width: 18)
+                    
+                    Button {
+                        let impact = UIImpactFeedbackGenerator(style: .light)
+                        impact.impactOccurred()
+                        viewModel.fontSize = min(40, viewModel.fontSize + 2)
+                    } label: {
+                        Image(systemName: "plus.circle")
+                            .font(.system(size: 16))
+                            .foregroundColor(theme.textPrimary.opacity(0.8))
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(theme.surfaceColor)
+                .cornerRadius(10)
+                
+                Spacer()
+                
+                // Audio Toggle
+                Button {
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        isAudioPlayerVisible.toggle()
+                        if isAudioPlayerVisible {
+                            let streamUrl = SongAudioURL.streamURL(for: hymn, selectedTune: selectedTune)
+                            if hymn.type == "mt" {
+                                Task {
+                                    await midiAudio.loadAndPlay(urlString: streamUrl)
+                                }
+                            } else {
+                                audio.loadAndPlay(urlString: streamUrl, title: "\(hymn.type == "keerthane" ? "Keerthane" : "Hymn") \(hymn.number)", subtitle: hymn.title)
+                            }
+                        } else {
+                            if hymn.type == "mt" {
+                                midiAudio.stop()
+                            } else {
+                                audio.pause()
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        let playing = hymn.type == "mt" ? midiAudio.isPlaying : audio.isPlaying
+                        Image(systemName: isAudioPlayerVisible ? (playing ? "waveform.and.mic" : "pause.circle.fill") : "play.circle.fill")
+                            .font(.system(size: 14))
+                        Text(isAudioPlayerVisible ? "Hide Player" : "Show Player")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(isAudioPlayerVisible ? theme.textPrimary.opacity(0.12) : theme.surfaceColor)
+                    .cornerRadius(10)
+                    .foregroundColor(theme.textPrimary)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(isAudioPlayerVisible ? theme.textPrimary.opacity(0.3) : theme.strokeColor, lineWidth: 1)
+                    )
+                }
+            }
+            
+            // Bilingual Language Selector
+            HStack(spacing: 2) {
+                ForEach(HymnDetailViewModel.SongLanguage.allCases) { lang in
+                    Button {
+                        let impact = UIImpactFeedbackGenerator(style: .medium)
+                        impact.impactOccurred()
+                        withAnimation {
+                            viewModel.selectedLanguage = lang
+                        }
+                    } label: {
+                        Text(lang.rawValue)
+                            .font(.system(size: 12, weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(viewModel.selectedLanguage == lang ? theme.textPrimary.opacity(0.12) : Color.clear)
+                            .cornerRadius(6)
+                            .foregroundColor(theme.textPrimary)
+                    }
+                }
+            }
+            .padding(4)
+            .background(theme.surfaceColor)
+            .cornerRadius(10)
+        }
+        .padding(12)
+        .background(theme.cardBackground)
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(theme.strokeColor, lineWidth: 1)
+        )
+    }
+    
+    private var sidebarToolbarRow: some View {
+        HStack {
+            Button {
+                withAnimation(.spring()) {
+                    isHidden.toggle()
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "eye.slash")
+                        .font(.system(size: 11, weight: .bold))
+                    Text("Hide Actions")
+                        .font(.system(size: 11, weight: .bold))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(theme.surfaceColor)
+                .cornerRadius(8)
+                .foregroundColor(theme.textPrimary)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(theme.strokeColor, lineWidth: 1)
+                )
+            }
+            
+            Spacer()
+            
+            HStack(spacing: 16) {
+                // Casting pickers (AirPlay always; Chromecast when remotely enabled)
+                AirPlayRoutePicker()
+                    .frame(width: 24, height: 24)
+                
+                CastButton(tint: theme.textPrimary)
+                
+                // Issue reporter
+                Button {
+                    viewModel.isShowingReportSheet = true
+                } label: {
+                    Image(systemName: "exclamationmark.bubble")
+                        .foregroundColor(theme.textPrimary)
+                }
+                
+                // Heart-shaped toggle favorite buttons
+                Button {
+                    let isFav = favoritesManager.isFavorite(songId: hymn.id)
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.5)) {
+                        favoriteScale = 1.4
+                        favoritesManager.toggleFavorite(song: hymn)
+                    }
+                    Task {
+                        try? await Task.sleep(for: .seconds(0.15))
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.5)) {
+                            favoriteScale = 1.0
+                        }
+                    }
+                    PostHogService.shared.track(event: isFav ? "song_favorite_removed" : "song_favorite_added", properties: [
+                        "song_id": hymn.id,
+                        "song_number": hymn.number,
+                        "song_type": hymn.type,
+                        "song_title": hymn.title
+                    ])
+                } label: {
+                    Image(systemName: favoritesManager.isFavorite(songId: hymn.id) ? "heart.fill" : "heart")
+                        .foregroundColor(favoritesManager.isFavorite(songId: hymn.id) ? .red : theme.textPrimary)
+                        .scaleEffect(favoriteScale)
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(theme.cardBackground)
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(theme.strokeColor, lineWidth: 1)
+        )
+    }
     
     private var headerPanel: some View {
         HStack(spacing: 8) {
@@ -488,8 +790,8 @@ public struct HymnDetailView: View {
         }
     }
     
-    private var glassmorphicAudioPlayer: some View {
-        VStack(spacing: 12) {
+    private func glassmorphicAudioPlayer(isEmbedded: Bool) -> some View {
+        let player = VStack(spacing: 12) {
             // Progression Track bar & timings
             HStack {
                 Text(formatTime(dragTime ?? audio.currentTime))
@@ -520,7 +822,7 @@ public struct HymnDetailView: View {
             .padding(.horizontal)
             
             // Audio Controls Center
-            HStack(spacing: 32) {
+            HStack(spacing: isEmbedded ? 14 : 32) {
                 // Loop button
                 Button {
                     let impact = UIImpactFeedbackGenerator(style: .light)
@@ -597,15 +899,28 @@ public struct HymnDetailView: View {
         .padding(.vertical, 16)
         .padding(.horizontal, 12)
         .background(
-            // Ultimate Material Blur layer
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    Rectangle()
-                        .stroke(theme.strokeColor, lineWidth: 1)
-                )
-                .ignoresSafeArea()
+            Group {
+                if isEmbedded {
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(theme.cardBackground)
+                } else {
+                    RoundedRectangle(cornerRadius: 0)
+                        .fill(.ultraThinMaterial)
+                }
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: isEmbedded ? 16 : 0)
+                    .stroke(theme.strokeColor, lineWidth: 1)
+            )
         )
+        
+        return Group {
+            if isEmbedded {
+                player
+            } else {
+                player.ignoresSafeArea()
+            }
+        }
     }
     
     private var reportLyricsSheet: some View {
@@ -636,8 +951,8 @@ public struct HymnDetailView: View {
         }
     }
     
-    private var glassmorphicMidiPlayer: some View {
-        VStack(spacing: 12) {
+    private func glassmorphicMidiPlayer(isEmbedded: Bool) -> some View {
+        let player = VStack(spacing: 12) {
             if tuneOptions.count > 1 {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -683,6 +998,7 @@ public struct HymnDetailView: View {
                     ),
                     in: 0...max(1, midiAudio.duration),
                     onEditingChanged: { editing in
+                        HapticsManager.shared.triggerSelection()
                         if !editing {
                             if let targetTime = dragTime {
                                 midiAudio.seek(to: targetTime)
@@ -700,11 +1016,10 @@ public struct HymnDetailView: View {
             .padding(.horizontal)
             
             // Audio Controls Center
-            HStack(spacing: 32) {
+            HStack(spacing: isEmbedded ? 12 : 32) {
                 // Loop button
                 Button {
-                    let impact = UIImpactFeedbackGenerator(style: .light)
-                    impact.impactOccurred()
+                    HapticsManager.shared.triggerLight()
                     midiAudio.isLooping.toggle()
                 } label: {
                     Image(systemName: midiAudio.isLooping ? "repeat.1" : "repeat")
@@ -720,6 +1035,7 @@ public struct HymnDetailView: View {
                         .font(.system(size: 22))
                         .foregroundColor(theme.textPrimary)
                 }
+                .buttonStyle(.hapticLight)
                 
                 // Play / Pause
                 Button {
@@ -740,6 +1056,7 @@ public struct HymnDetailView: View {
                         }
                     }
                 }
+                .buttonStyle(.hapticMedium)
                 
                 // Forward 5s
                 Button {
@@ -749,11 +1066,13 @@ public struct HymnDetailView: View {
                         .font(.system(size: 22))
                         .foregroundColor(theme.textPrimary)
                 }
+                .buttonStyle(.hapticLight)
                 
                 // Speed Controller
                 Menu {
                     ForEach([0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { rate in
                         Button {
+                            HapticsManager.shared.triggerSelection()
                             midiAudio.playbackRate = Float(rate)
                         } label: {
                             HStack {
@@ -779,21 +1098,36 @@ public struct HymnDetailView: View {
                         .font(.system(size: 18))
                         .foregroundColor(theme.textPrimary)
                 }
+                .buttonStyle(.hapticLight)
             }
         }
         .padding(.vertical, 16)
         .padding(.horizontal, 12)
         .background(
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    Rectangle()
-                        .stroke(theme.strokeColor, lineWidth: 1)
-                )
-                .ignoresSafeArea()
+            Group {
+                if isEmbedded {
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(theme.cardBackground)
+                } else {
+                    RoundedRectangle(cornerRadius: 0)
+                        .fill(.ultraThinMaterial)
+                }
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: isEmbedded ? 16 : 0)
+                    .stroke(theme.strokeColor, lineWidth: 1)
+            )
         )
         .sheet(isPresented: $isShowingAdvancedMidi) {
             AdvancedMidiSettingsView()
+        }
+        
+        return Group {
+            if isEmbedded {
+                player
+            } else {
+                player.ignoresSafeArea()
+            }
         }
     }
 
@@ -830,19 +1164,26 @@ struct AdvancedMidiSettingsView: View {
                         }
                     }
                     .onChange(of: globalInstrumentId) { newValue in
+                        HapticsManager.shared.triggerSelection()
                         engine.updateGlobalInstrument(to: newValue)
                     }
                     
                     Stepper("Transpose: \(engine.transpose > 0 ? "+" : "")\(engine.transpose)", value: Binding(
                         get: { engine.transpose },
-                        set: { engine.transpose = $0 }
+                        set: {
+                            HapticsManager.shared.triggerSelection()
+                            engine.transpose = $0
+                        }
                     ), in: -12...12)
                 }
                 
                 Section(header: Text("Track Routing (SATB)"), footer: Text("Allows assigning different instruments to individual parts. Assuming Track 1 = Soprano, Track 2 = Alto, Track 3 = Tenor, Track 4 = Bass.")) {
                     Toggle("Enable Advanced Routing", isOn: Binding(
                         get: { engine.isAdvancedMode },
-                        set: { engine.isAdvancedMode = $0 }
+                        set: {
+                            HapticsManager.shared.triggerSelection()
+                            engine.isAdvancedMode = $0
+                        }
                     ))
                     
                     if engine.isAdvancedMode {
@@ -850,6 +1191,7 @@ struct AdvancedMidiSettingsView: View {
                             Picker(partName(for: index), selection: Binding(
                                 get: { engine.satbInstruments[index] },
                                 set: { newValue in
+                                    HapticsManager.shared.triggerSelection()
                                     engine.satbInstruments[index] = newValue
                                 }
                             )) {

@@ -45,25 +45,6 @@ public final class HymnsListViewModel {
             self.isLoading = true
         }
         
-        let urlString: String
-        switch section {
-        case .keerthanes:
-            urlString = "https://raw.githubusercontent.com/Reynold29/csi-hymns-vault/main/keerthane_data.json"
-        case .mt:
-            // Assuming MT will eventually be hosted, but for now we'll use a placeholder or local asset.
-            // Using a dummy URL to let network fail and fallback to bundled asset.
-            urlString = "https://raw.githubusercontent.com/Reynold29/csi-hymns-vault/main/mangalore_hymns_data.json"
-        case .hymns:
-            urlString = "https://raw.githubusercontent.com/Reynold29/csi-hymns-vault/main/hymns_data.json"
-        }
-        
-        guard let url = URL(string: urlString) else {
-            await MainActor.run {
-                self.isLoading = false
-            }
-            return
-        }
-        
         let fileManager = FileManager.default
         let cacheDirectory = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
         let cacheFileName: String
@@ -73,6 +54,85 @@ public final class HymnsListViewModel {
         case .hymns: cacheFileName = "hymn_data_cache.json"
         }
         let cacheFileUrl = cacheDirectory.appendingPathComponent(cacheFileName)
+        
+        // 1. Prioritize local cache for instant load
+        if fileManager.fileExists(atPath: cacheFileUrl.path),
+           let cachedData = try? Data(contentsOf: cacheFileUrl) {
+            do {
+                let decoded = try JSONDecoder().decode([Hymn].self, from: cachedData)
+                let typeStr: String
+                switch section {
+                case .keerthanes: typeStr = "keerthane"
+                case .mt: typeStr = "mt"
+                case .hymns: typeStr = "hymn"
+                }
+                let mapped = decoded.map { hymn in
+                    var u = hymn
+                    u.type = typeStr
+                    return u
+                }
+                await MainActor.run {
+                    self.hymns = mapped
+                    self.isLoading = false
+                }
+                print("HymnsListViewModel: Loaded songs from offline cache.")
+                return
+            } catch {
+                print("HymnsListViewModel: Offline cache JSON decoding failed: \(error)")
+            }
+        }
+        
+        // 2. Fallback to bundled assets (no network delays)
+        let assetName: String
+        switch section {
+        case .keerthanes: assetName = "keerthane_data"
+        case .mt: assetName = "mangalore_hymns_data"
+        case .hymns: assetName = "hymns_data"
+        }
+        
+        if let asset = NSDataAsset(name: assetName) {
+            do {
+                let decoded = try JSONDecoder().decode([Hymn].self, from: asset.data)
+                let typeStr: String
+                switch section {
+                case .keerthanes: typeStr = "keerthane"
+                case .mt: typeStr = "mt"
+                case .hymns: typeStr = "hymn"
+                }
+                let mapped = decoded.map { hymn in
+                    var u = hymn
+                    u.type = typeStr
+                    return u
+                }
+                await MainActor.run {
+                    self.hymns = mapped
+                    self.isLoading = false
+                }
+                print("HymnsListViewModel: Loaded songs from bundled NSDataAsset '\(assetName)'.")
+                return
+            } catch {
+                print("HymnsListViewModel: Bundled asset JSON decoding failed: \(error)")
+            }
+        }
+        
+        // 3. Remote fallback only if cache and bundles are unavailable
+        let urlString: String
+        switch section {
+        case .keerthanes:
+            urlString = "https://raw.githubusercontent.com/Reynold29/csi-hymns-vault/main/keerthane_data.json"
+        case .mt:
+            urlString = "https://raw.githubusercontent.com/Reynold29/csi-hymns-vault/main/mangalore_hymns_data.json"
+        case .hymns:
+            urlString = "https://raw.githubusercontent.com/Reynold29/csi-hymns-vault/main/hymns_data.json"
+        }
+        
+        guard let url = URL(string: urlString) else {
+            await MainActor.run {
+                self.hymns = []
+                self.isLoading = false
+            }
+            return
+        }
         
         do {
             let (data, response) = try await URLSession.shared.data(for: URLRequest(url: url))
@@ -90,7 +150,6 @@ public final class HymnsListViewModel {
                     return u
                 }
                 
-                // Persist cache locally
                 try? data.write(to: cacheFileUrl)
                 
                 await MainActor.run {
@@ -101,68 +160,9 @@ public final class HymnsListViewModel {
                 return
             }
         } catch {
-            print("HymnsListViewModel: Network fetch failed, trying local cache: \(error)")
+            print("HymnsListViewModel: Remote fallback failed: \(error)")
         }
         
-        // Offline Cache Fallback
-        if fileManager.fileExists(atPath: cacheFileUrl.path),
-           let cachedData = try? Data(contentsOf: cacheFileUrl) {
-            do {
-                let decoded = try JSONDecoder().decode([Hymn].self, from: cachedData)
-            let typeStr: String
-            switch section {
-            case .keerthanes: typeStr = "keerthane"
-            case .mt: typeStr = "mt"
-            case .hymns: typeStr = "hymn"
-            }
-            let mapped = decoded.map { hymn in
-                var u = hymn
-                u.type = typeStr
-                return u
-            }
-            await MainActor.run {
-                self.hymns = mapped
-                self.isLoading = false
-            }
-            print("HymnsListViewModel: Loaded songs from offline cache.")
-            } catch {
-                print("HymnsListViewModel: Offline cache JSON decoding failed: \(error)")
-            }
-        }
-        
-        // 2. Offline Compiled Asset Fallback (Premium, real production data!)
-        let assetName: String
-        switch section {
-        case .keerthanes: assetName = "keerthane_data"
-        case .mt: assetName = "mangalore_hymns_data"
-        case .hymns: assetName = "hymns_data"
-        }
-        
-        if let asset = NSDataAsset(name: assetName) {
-            do {
-                let decoded = try JSONDecoder().decode([Hymn].self, from: asset.data)
-            let typeStr: String
-            switch section {
-            case .keerthanes: typeStr = "keerthane"
-            case .mt: typeStr = "mt"
-            case .hymns: typeStr = "hymn"
-            }
-            let mapped = decoded.map { hymn in
-                var u = hymn
-                u.type = typeStr
-                return u
-            }
-            await MainActor.run {
-                self.hymns = mapped
-                self.isLoading = false
-            }
-            print("HymnsListViewModel: Loaded songs from bundled NSDataAsset '\(assetName)'.")
-            } catch {
-                print("HymnsListViewModel: Bundled asset JSON decoding failed: \(error)")
-            }
-        }
-        
-        // 3. Emergency empty state fallback
         await MainActor.run {
             self.hymns = []
             self.isLoading = false
@@ -345,36 +345,73 @@ public struct HymnsListView: View {
     public var body: some View {
         NavigationStack {
             ScrollViewReader { scrollProxy in
-                ZStack {
-                    // Deep gradient background conforming to dynamic aesthetics
-                    theme.backgroundColor
-                        .ignoresSafeArea()
+                GeometryReader { geometry in
+                    let isLandscape = geometry.size.width > geometry.size.height
                     
-                    if theme.activeTheme != .amoled {
-                        theme.backgroundGradient
+                    ZStack {
+                        // Deep gradient background conforming to dynamic aesthetics
+                        theme.backgroundColor
                             .ignoresSafeArea()
-                    }
-                    
-                    VStack(spacing: 16) {
-                        // Custom Glass Search Container
-                        customSearchBar
                         
-                        // Filters & Sorting Chips
-                        filterChipsRow
-                        
-                        if viewModel.isLoading {
-                            ProgressView()
-                                .tint(theme.textPrimary)
-                                .frame(maxHeight: .infinity)
-                        } else {
-                            hymnsScrollView(scrollProxy: scrollProxy)
+                        if theme.activeTheme != .amoled {
+                            theme.backgroundGradient
+                                .ignoresSafeArea()
                         }
+                        
+                        Group {
+                            if isLandscape {
+                                HStack(alignment: .top, spacing: 20) {
+                                    // Left Column: Search & Filters
+                                    VStack(spacing: 16) {
+                                        customSearchBar
+                                        
+                                        ScrollView(showsIndicators: false) {
+                                            filterChipsRowLandscape
+                                                .padding(.bottom, 16)
+                                        }
+                                    }
+                                    .frame(width: 240)
+                                    
+                                    // Right Column: Scrollable List of Hymns
+                                    VStack(spacing: 0) {
+                                        if viewModel.isLoading {
+                                            ProgressView()
+                                                .tint(theme.textPrimary)
+                                                .frame(maxHeight: .infinity)
+                                        } else {
+                                            hymnsScrollView(scrollProxy: scrollProxy)
+                                        }
+                                    }
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                }
+                                .padding(.horizontal)
+                                .frame(maxWidth: 800)
+                            } else {
+                                VStack(spacing: 16) {
+                                    // Custom Glass Search Container
+                                    customSearchBar
+                                    
+                                    // Filters & Sorting Chips
+                                    filterChipsRow
+                                    
+                                    if viewModel.isLoading {
+                                        ProgressView()
+                                            .tint(theme.textPrimary)
+                                            .frame(maxHeight: .infinity)
+                                    } else {
+                                        hymnsScrollView(scrollProxy: scrollProxy)
+                                    }
+                                }
+                                .padding(.horizontal)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        
+                        // Glassmorphic forced non-blocking top HUD status toast
+                        toastHUDView
                     }
-                    .padding(.horizontal)
-                    
-                    // Glassmorphic forced non-blocking top HUD status toast
-                    toastHUDView
                 }
+                .ignoresSafeArea(.keyboard, edges: .bottom)
                 .navigationTitle(title)
                 .navigationBarTitleDisplayMode(.inline)
                 .csiGlassNavigationBar(theme: theme)
@@ -559,6 +596,71 @@ public struct HymnsListView: View {
         .padding(.vertical, 4)
     }
     
+    private var filterChipsRowLandscape: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Sort Order")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(theme.textSecondary)
+                .padding(.leading, 4)
+            
+            ForEach(viewModel.availableOrderModes) { mode in
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        viewModel.selectedOrder = mode
+                    }
+                } label: {
+                    Text(mode.rawValue)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(theme.textPrimary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(viewModel.selectedOrder == mode ? theme.textPrimary.opacity(0.12) : theme.surfaceColor)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(viewModel.selectedOrder == mode ? theme.textPrimary.opacity(0.3) : theme.strokeColor, lineWidth: 1)
+                                )
+                        )
+                }
+            }
+            
+            Divider().background(theme.strokeColor).padding(.vertical, 8)
+            
+            Button {
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                isShowingRefreshConfirmAlert = true
+            } label: {
+                HStack(spacing: 6) {
+                    if isRefreshingSongs {
+                        ProgressView()
+                            .tint(theme.textPrimary)
+                            .scaleEffect(0.8)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(theme.textPrimary)
+                    }
+                    Text(isRefreshingSongs ? "Syncing..." : "Sync Lyrics")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(theme.textPrimary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(theme.surfaceColor)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(theme.strokeColor, lineWidth: 1)
+                        )
+                )
+            }
+            .disabled(isRefreshingSongs)
+        }
+    }
+    
     private func hymnsScrollView(scrollProxy: ScrollViewProxy) -> some View {
         ScrollView {
             LazyVStack(spacing: 12, pinnedViews: [.sectionHeaders]) {
@@ -632,7 +734,8 @@ public struct HymnsListView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     
                     if !hymn.signature.isEmpty {
-                        Text(formattedSignature(hymn.signature))
+                        let text = hymn.type == "mt" ? "M.T. \(hymn.signature)" : formattedSignature(hymn.signature)
+                        Text(text)
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(theme.textSecondary)
                             .multilineTextAlignment(.leading)
