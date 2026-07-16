@@ -3,10 +3,17 @@ import SwiftUI
 /// Core Page structure for liturgies downloaded from remote JSON.
 public struct OrderPage: Codable, Identifiable, Hashable, Sendable {
     public var id: Int { pageNo }
-    public let pageNo: Int
-    public let title: String?
-    public let content: String
-    public let type: String // 'regular' or 'festival'
+    public var pageNo: Int
+    public var title: String?
+    public var content: String
+    public var type: String // 'regular' or 'festival'
+    
+    enum CodingKeys: String, CodingKey {
+        case pageNo = "page_no"
+        case title
+        case content
+        case type
+    }
     
     public init(pageNo: Int, title: String?, content: String, type: String) {
         self.pageNo = pageNo
@@ -90,101 +97,203 @@ public struct OrderOfServiceListView: View {
     
     public var body: some View {
         NavigationStack {
-            ZStack {
-                // Adaptive theme backgrounds
-                theme.backgroundColor
-                    .ignoresSafeArea()
+            GeometryReader { geometry in
+                let isLandscape = geometry.size.width > geometry.size.height
                 
-                if theme.activeTheme != .amoled {
-                    theme.backgroundGradient
+                ZStack {
+                    // Adaptive theme backgrounds
+                    theme.backgroundColor
                         .ignoresSafeArea()
-                }
-                
-                VStack(spacing: 0) {
-                    ScrollView {
-                        VStack(spacing: 36) {
-                            // Centered Group Header
-                            VStack(spacing: 12) {
-                                Text("ಆರಾಧನಾ ಕ್ರಮ")
-                                    .font(.system(size: 32, weight: .black))
-                                    .foregroundColor(theme.textPrimary)
-                                    .multilineTextAlignment(.center)
-                                
-                                Text("Order of Service")
-                                    .font(.system(size: 22, weight: .bold))
-                                    .foregroundColor(theme.textSecondary)
-                                    .multilineTextAlignment(.center)
-                                
-                                Text("Select a liturgy to read or follow along with the church service.")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(theme.textSecondary.opacity(0.7))
-                                    .multilineTextAlignment(.center)
-                                    .padding(.horizontal, 24)
-                            }
-                            .padding(.top, 40)
-                            
-                            // Grouped Action Cards
-                            VStack(spacing: 20) {
-                                // Regular Sunday card
-                                orderCard(
-                                    englishTitle: "Regular Sunday",
-                                    kannadaTitle: "ಭಾನುವಾರದ ದೇವರಾರಾಧನೆ",
-                                    englishHeader: "Regular Sunday Order of Service",
-                                    subtitle: "Weekly Sunday Worship Liturgy",
-                                    icon: "sun.max.fill",
-                                    gradientColors: [Color(hex: "FFC66A"), Color(hex: "FFD48C")],
-                                    readerType: "regular"
-                                )
-                                
-                                // Festival card
-                                orderCard(
-                                    englishTitle: "Festival Services",
-                                    kannadaTitle: "ಹಬ್ಬದ ಆರಾಧನೆ",
-                                    englishHeader: "Festival Order of Service",
-                                    subtitle: "Special Feasts & Festivals Liturgy",
-                                    icon: "sparkles",
-                                    gradientColors: [Color(hex: "BCEBFF"), Color(hex: "D7F4FF")],
-                                    readerType: "festival"
-                                )
-                            }
-                            .padding(.horizontal, 8)
-                        }
-                        .padding(.bottom, 24)
+                    
+                    if theme.activeTheme != .amoled {
+                        theme.backgroundGradient
+                            .ignoresSafeArea()
                     }
                     
-                    // Explicit Centered Manual Refresh Button
-                    Button {
-                        Task {
-                            await refreshLiturgyCaches()
-                        }
-                    } label: {
-                        HStack(spacing: 10) {
-                            if isRefreshing {
-                                ProgressView()
-                                    .tint(theme.backgroundColor)
-                            } else {
-                                Image(systemName: "arrow.clockwise")
-                                    .foregroundColor(theme.backgroundColor)
-                                Text("Refresh Liturgies")
-                                    .foregroundColor(theme.backgroundColor)
+                    VStack(spacing: 0) {
+                        if isLandscape {
+                            HStack(spacing: 32) {
+                                // Left Column: Headers & Refresh
+                                VStack(alignment: .leading, spacing: 14) {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text("ಆರಾಧನಾ ಕ್ರಮ")
+                                            .font(.system(size: 26, weight: .black))
+                                            .foregroundColor(theme.textPrimary)
+                                        
+                                        Text("Order of Service")
+                                            .font(.system(size: 19, weight: .bold))
+                                            .foregroundColor(theme.textSecondary)
+                                    }
+                                    
+                                    Text("Select a liturgy to read or follow along with the church service.")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(theme.textSecondary.opacity(0.75))
+                                        .multilineTextAlignment(.leading)
+                                    
+                                    Spacer()
+                                    
+                                    Button {
+                                        Task {
+                                            await refreshLiturgyCaches()
+                                        }
+                                    } label: {
+                                        HStack(spacing: 8) {
+                                            if isRefreshing {
+                                                ProgressView()
+                                                    .tint(theme.backgroundColor)
+                                            } else {
+                                                Image(systemName: "arrow.clockwise")
+                                                    .foregroundColor(theme.backgroundColor)
+                                                Text("Refresh Liturgies")
+                                                    .foregroundColor(theme.backgroundColor)
+                                            }
+                                        }
+                                        .font(.system(size: 14, weight: .bold))
+                                        .padding(.horizontal, 20)
+                                        .padding(.vertical, 12)
+                                        .background(theme.textPrimary)
+                                        .cornerRadius(24)
+                                    }
+                                    .disabled(isRefreshing)
+                                    .padding(.bottom, 12)
+                                }
+                                .frame(width: 240, alignment: .leading)
+                                .padding(.vertical, 20)
+                                
+                                // Right Column: Cards Stacked Vertically
+                                ScrollView(showsIndicators: false) {
+                                    VStack(spacing: 16) {
+                                        orderCard(
+                                            englishTitle: "Regular Sunday",
+                                            kannadaTitle: "ಭಾನುವಾರದ ದೇವರಾರಾಧನೆ",
+                                            englishHeader: "Regular Sunday Order of Service",
+                                            subtitle: "Weekly Sunday Worship Liturgy",
+                                            icon: "sun.max.fill",
+                                            gradientColors: [Color(hex: "FFC66A"), Color(hex: "FFD48C")],
+                                            readerType: "regular"
+                                        )
+                                        
+                                        orderCard(
+                                            englishTitle: "Festival Services",
+                                            kannadaTitle: "ಹಬ್ಬದ ಆರಾಧನೆ",
+                                            englishHeader: "Festival Order of Service",
+                                            subtitle: "Special Feasts & Festivals Liturgy",
+                                            icon: "sparkles",
+                                            gradientColors: [Color(hex: "BCEBFF"), Color(hex: "D7F4FF")],
+                                            readerType: "festival"
+                                        )
+                                    }
+                                    .padding(.vertical, 20)
+                                }
                             }
+                            .padding(.horizontal, 24)
+                        } else {
+                            ScrollView {
+                                VStack(spacing: 36) {
+                                    // Centered Group Header
+                                    VStack(spacing: 12) {
+                                        Text("ಆರಾಧನಾ ಕ್ರಮ")
+                                            .font(.system(size: 32, weight: .black))
+                                            .foregroundColor(theme.textPrimary)
+                                            .multilineTextAlignment(.center)
+                                        
+                                        Text("Order of Service")
+                                            .font(.system(size: 22, weight: .bold))
+                                            .foregroundColor(theme.textSecondary)
+                                            .multilineTextAlignment(.center)
+                                        
+                                        Text("Select a liturgy to read or follow along with the church service.")
+                                            .font(.system(size: 14))
+                                            .foregroundColor(theme.textSecondary.opacity(0.7))
+                                            .multilineTextAlignment(.center)
+                                            .padding(.horizontal, 24)
+                                    }
+                                    .padding(.top, 40)
+                                    
+                                    // Grouped Action Cards
+                                    VStack(spacing: 20) {
+                                        // Regular Sunday card
+                                        orderCard(
+                                            englishTitle: "Regular Sunday",
+                                            kannadaTitle: "ಭಾನುವಾರದ ದೇವರಾರಾಧನೆ",
+                                            englishHeader: "Regular Sunday Order of Service",
+                                            subtitle: "Weekly Sunday Worship Liturgy",
+                                            icon: "sun.max.fill",
+                                            gradientColors: [Color(hex: "FFC66A"), Color(hex: "FFD48C")],
+                                            readerType: "regular"
+                                        )
+                                        
+                                        // Festival card
+                                        orderCard(
+                                            englishTitle: "Festival Services",
+                                            kannadaTitle: "ಹಬ್ಬದ ಆರಾಧನೆ",
+                                            englishHeader: "Festival Order of Service",
+                                            subtitle: "Special Feasts & Festivals Liturgy",
+                                            icon: "sparkles",
+                                            gradientColors: [Color(hex: "BCEBFF"), Color(hex: "D7F4FF")],
+                                            readerType: "festival"
+                                        )
+                                    }
+                                    .padding(.horizontal, 16)
+                                }
+                                .padding(.bottom, 24)
+                            }
+                            
+                            // Explicit Centered Manual Refresh Button
+                            Button {
+                                Task {
+                                    await refreshLiturgyCaches()
+                                }
+                            } label: {
+                                HStack(spacing: 10) {
+                                    if isRefreshing {
+                                        ProgressView()
+                                            .tint(theme.backgroundColor)
+                                    } else {
+                                        Image(systemName: "arrow.clockwise")
+                                            .foregroundColor(theme.backgroundColor)
+                                        Text("Refresh Liturgies")
+                                            .foregroundColor(theme.backgroundColor)
+                                    }
+                                }
+                                .font(.system(size: 15, weight: .heavy))
+                                .padding(.horizontal, 32)
+                                .padding(.vertical, 16)
+                                .background(theme.textPrimary)
+                                .cornerRadius(32)
+                                .shadow(color: theme.shadowColor.opacity(0.12), radius: 12, y: 6)
+                            }
+                            .disabled(isRefreshing)
+                            .padding(.bottom, 28)
                         }
-                        .font(.system(size: 15, weight: .heavy))
-                        .padding(.horizontal, 32)
-                        .padding(.vertical, 16)
-                        .background(theme.textPrimary)
-                        .cornerRadius(32)
-                        .shadow(color: theme.shadowColor.opacity(0.12), radius: 12, y: 6)
                     }
-                    .disabled(isRefreshing)
-                    .padding(.bottom, 28)
+                    .frame(maxWidth: isLandscape ? 640 : .infinity)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .swipeToNavigate(selectedTab: $selectedTab, maxTab: maxTab)
                 }
-                .padding(.horizontal, 20)
-                .swipeToNavigate(selectedTab: $selectedTab, maxTab: maxTab)
             }
             .navigationTitle("ಆರಾಧನಾ ಕ್ರಮ / Liturgies")
             .navigationBarTitleDisplayMode(.inline)
             .csiGlassNavigationBar(theme: theme)
+            .toolbar {
+                if AppNavigationService.shared.activeSection != nil {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button(action: {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                AppNavigationService.shared.activeSection = nil
+                            }
+                        }) {
+                            HStack(spacing: 3) {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 14, weight: .bold))
+                                Text("Home")
+                                    .font(.system(size: 15, weight: .bold))
+                            }
+                            .foregroundColor(theme.textPrimary)
+                        }
+                    }
+                }
+            }
             .onAppear {
                 startTitleAlternatingTimer()
                 Task {
@@ -277,6 +386,14 @@ public struct OrderOfServiceListView: View {
     
     /// Startup routine to automatically fetch and cache remote liturgies if elapsed time exceeds 3 days.
     private func checkAndUpdateOrderOfServiceOnOpen() async {
+        // Ensure local-first fallback is populated on first launch
+        if UserDefaults.standard.data(forKey: "orderOfServiceData") == nil {
+            if let seedData = LiturgyOfflineSeeds.fallbackJSON.data(using: .utf8) {
+                UserDefaults.standard.set(seedData, forKey: "orderOfServiceData")
+                print("[OrderOfService] Initialized cache with offline seeds fallback.")
+            }
+        }
+        
         let last = UserDefaults.standard.double(forKey: "lastOrderOfServiceUpdate")
         let now = Date().timeIntervalSince1970 * 1000 // millisecond epoch
         let interval: Double = 3 * 24 * 60 * 60 * 1000 // 3 days
@@ -289,24 +406,27 @@ public struct OrderOfServiceListView: View {
         }
         
         print("[OrderOfService] Cache expired or missing, starting background remote fetch.")
-        do {
-            isRefreshing = true
-            let url = URL(string: "https://raw.githubusercontent.com/Reynold29/csi-hymns-vault/refs/heads/main/order-of-service_data.json")!
-            let (data, response) = try await URLSession.shared.data(from: url)
-            
-            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
-                // Pre-decode check to ensure structure safety
-                _ = try OrderPage.parsePages(from: data)
+        Task {
+            do {
+                let url = URL(string: "https://raw.githubusercontent.com/Reynold29/csi-hymns-vault/refs/heads/main/order-of-service_data.json")!
+                let (data, response) = try await URLSession.shared.data(from: url)
                 
-                // Persist cache and save timestamp
-                UserDefaults.standard.set(data, forKey: "orderOfServiceData")
-                UserDefaults.standard.set(now, forKey: "lastOrderOfServiceUpdate")
-                print("[OrderOfService] Startup update succeeded.")
+                if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                    // Pre-decode check to ensure structure safety
+                    _ = try OrderPage.parsePages(from: data)
+                    
+                    // Persist cache and save timestamp
+                    UserDefaults.standard.set(data, forKey: "orderOfServiceData")
+                    UserDefaults.standard.set(now, forKey: "lastOrderOfServiceUpdate")
+                    print("[OrderOfService] Startup update succeeded.")
+                    
+                    // Notify reader view to reload pages dynamically
+                    NotificationCenter.default.post(name: Notification.Name("csi_liturgies_refreshed"), object: nil)
+                }
+            } catch {
+                print("[OrderOfService] Startup background sync failed: \(error)")
             }
-        } catch {
-            print("[OrderOfService] Startup update failed: \(error)")
         }
-        isRefreshing = false
     }
     
     /// Triggered by manual refresh button: bypasses the cache window, fetches fresh JSON, and triggers notifications.

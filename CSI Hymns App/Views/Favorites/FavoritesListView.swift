@@ -10,7 +10,10 @@ public struct FavoritesListView: View {
     @State private var selectedCategory = 0 // 0 = Hymns, 1 = Keerthanes
     
     private var maxTab: Int {
-        ChristmasModeService.shared.isChristmasTime ? 3 : 4
+        if AppNavigationService.shared.activeSection == .mt {
+            return 2
+        }
+        return ChristmasModeService.shared.isChristmasTime ? 3 : 4
     }
     
     public init(selectedTab: Binding<Int>) {
@@ -20,8 +23,15 @@ public struct FavoritesListView: View {
     /// Filters favorites based on the active tab selection and query
     private var filteredFavorites: [Hymn] {
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let targetType = selectedCategory == 0 ? "hymn" : "keerthane"
-        let source = favoritesManager.favorites.filter { $0.type == targetType }
+        let activeSec = AppNavigationService.shared.activeSection ?? .csi
+        
+        let source: [Hymn]
+        if activeSec == .mt {
+            source = favoritesManager.favorites.filter { $0.type == "mt" }
+        } else {
+            let targetType = selectedCategory == 0 ? "hymn" : "keerthane"
+            source = favoritesManager.favorites.filter { $0.type == targetType }
+        }
         
         if query.isEmpty {
             return source
@@ -35,35 +45,74 @@ public struct FavoritesListView: View {
     
     public var body: some View {
         NavigationStack {
-            ZStack {
-                // Adaptive theme background
-                theme.backgroundColor
-                    .ignoresSafeArea()
+            GeometryReader { geometry in
+                let isLandscape = geometry.size.width > geometry.size.height
                 
-                if theme.activeTheme != .amoled {
-                    theme.backgroundGradient
+                ZStack {
+                    // Adaptive theme background
+                    theme.backgroundColor
                         .ignoresSafeArea()
-                }
-                
-                VStack(spacing: 16) {
-                    // Glass Category Picker Segment
-                    pickerSegmentControl
                     
-                    // Themed Search Bar
-                    customSearchBar
-                    
-                    if filteredFavorites.isEmpty {
-                        emptyStateView
-                            .transition(.opacity)
-                    } else {
-                        favoritesScrollView
+                    if theme.activeTheme != .amoled {
+                        theme.backgroundGradient
+                            .ignoresSafeArea()
                     }
+                    
+                    VStack(spacing: 12) {
+                        if isLandscape {
+                            HStack(spacing: 16) {
+                                if AppNavigationService.shared.activeSection != .mt {
+                                    pickerSegmentControl
+                                        .frame(maxWidth: 320)
+                                }
+                                customSearchBar
+                            }
+                            .padding(.top, 4)
+                        } else {
+                            // Glass Category Picker Segment (Hidden for MT)
+                            if AppNavigationService.shared.activeSection != .mt {
+                                pickerSegmentControl
+                            }
+                            
+                            // Themed Search Bar
+                            customSearchBar
+                        }
+                        
+                        if filteredFavorites.isEmpty {
+                            emptyStateView
+                                .transition(.opacity)
+                        } else {
+                            favoritesScrollView
+                        }
+                    }
+                    .padding(.horizontal)
+                    .frame(maxWidth: isLandscape ? 640 : .infinity)
+                    .frame(maxWidth: .infinity, alignment: .center)
                 }
-                .padding(.horizontal)
             }
+            .ignoresSafeArea(.keyboard, edges: .bottom)
             .navigationTitle("Favorites")
             .navigationBarTitleDisplayMode(.inline)
             .csiGlassNavigationBar(theme: theme)
+            .toolbar {
+                if AppNavigationService.shared.activeSection != nil {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                AppNavigationService.shared.activeSection = nil
+                            }
+                        } label: {
+                            HStack(spacing: 3) {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 14, weight: .bold))
+                                Text("Home")
+                                        .font(.system(size: 15, weight: .bold))
+                            }
+                            .foregroundColor(theme.textPrimary)
+                        }
+                    }
+                }
+            }
         }
     }
     
@@ -191,7 +240,7 @@ public struct FavoritesListView: View {
                     .foregroundColor(theme.textPrimary)
                 
                 if !song.signature.isEmpty {
-                    Text(song.signature)
+                    Text(song.type == "mt" ? "M.T. \(song.signature)" : song.signature)
                         .font(.system(size: 11))
                         .foregroundColor(theme.textSecondary)
                         .padding(.horizontal, 6)

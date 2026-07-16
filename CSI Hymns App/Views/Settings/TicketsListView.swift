@@ -137,14 +137,7 @@ public struct TicketsListView: View {
     }
     
     private func ticketCard(_ ticket: JiraTicket) -> some View {
-        Button {
-            guard let url = URL(string: ticket.ticketUrl) else { return }
-            let impact = UIImpactFeedbackGenerator(style: .light)
-            impact.impactOccurred()
-            
-            // Launch in Safari
-            UIApplication.shared.open(url)
-        } label: {
+        NavigationLink(destination: TicketChatView(ticket: ticket)) {
             VStack(alignment: .leading, spacing: 14) {
                 // Header row
                 HStack {

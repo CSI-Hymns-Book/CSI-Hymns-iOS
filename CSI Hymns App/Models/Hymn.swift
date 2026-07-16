@@ -10,6 +10,8 @@ public struct Hymn: Codable, Identifiable, Hashable {
     public let lyricsKannada: String
     public let lyricsEnglish: String
     public var type: String // "hymn" or "keerthane"
+    public let category: String?
+    public let kannadaCategory: String?
     
     enum CodingKeys: String, CodingKey {
         case number
@@ -18,19 +20,23 @@ public struct Hymn: Codable, Identifiable, Hashable {
         case lyricsKannada = "lyrics_kannada"
         case lyricsEnglish = "lyrics_english"
         case type
+        case category
+        case kannadaCategory
         
         // Alternative keys for remote JSON mapping
         case lyricsAlternative = "lyrics"
         case kannadaLyricsAlternative = "kannadaLyrics"
     }
     
-    public init(number: Int, title: String, signature: String, lyricsKannada: String, lyricsEnglish: String, type: String = "hymn") {
+    public init(number: Int, title: String, signature: String, lyricsKannada: String, lyricsEnglish: String, type: String = "hymn", category: String? = nil, kannadaCategory: String? = nil) {
         self.number = number
         self.title = title
         self.signature = signature
         self.lyricsKannada = lyricsKannada
         self.lyricsEnglish = lyricsEnglish
         self.type = type
+        self.category = category
+        self.kannadaCategory = kannadaCategory
     }
     
     public init(from decoder: Decoder) throws {
@@ -70,6 +76,9 @@ public struct Hymn: Codable, Identifiable, Hashable {
         } else {
             self.type = "hymn"
         }
+        
+        self.category = try? container.decode(String.self, forKey: .category)
+        self.kannadaCategory = try? container.decode(String.self, forKey: .kannadaCategory)
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -80,5 +89,7 @@ public struct Hymn: Codable, Identifiable, Hashable {
         try container.encode(lyricsKannada, forKey: .lyricsKannada)
         try container.encode(lyricsEnglish, forKey: .lyricsEnglish)
         try container.encode(type, forKey: .type)
+        try container.encodeIfPresent(category, forKey: .category)
+        try container.encodeIfPresent(kannadaCategory, forKey: .kannadaCategory)
     }
 }

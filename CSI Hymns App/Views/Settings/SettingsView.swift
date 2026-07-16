@@ -18,6 +18,9 @@ public struct SettingsView: View {
     // Core Preferences saved reactively via AppStorage
     @AppStorage("use_page_swipe_physics") private var usePageSwipe = true
     @AppStorage("enable_haptic_feedback") private var enableHaptics = true
+    @AppStorage("midiInstrumentId") private var midiInstrumentId = 19
+    
+    @State private var showAdminControls = false
     
     public init() {}
     
@@ -74,6 +77,14 @@ public struct SettingsView: View {
                         settingsRowLabel(title: "Christmas Mode", subtitle: "Enable festive theme and Christmas carols", iconName: "snowflake")
                     }
                     .tint(theme.accentColor)
+                    
+                    Picker(selection: $midiInstrumentId, label: settingsRowLabel(title: "MIDI Instrument", subtitle: "Playback sound for .mid files", iconName: "pianokeys")) {
+                        Text("Pipe Organ").tag(19)
+                        Text("Acoustic Grand Piano").tag(1)
+                        Text("Reed Organ").tag(20)
+                        Text("Choir Aahs").tag(52)
+                    }
+                    .pickerStyle(.navigationLink)
                 }
                 .listRowBackground(theme.cardBackground)
                 
@@ -99,6 +110,12 @@ public struct SettingsView: View {
                 Section(header: Text("Support & Data").foregroundColor(theme.textSecondary)) {
                     NavigationLink(destination: TicketsListView()) {
                         settingsRowLabel(title: "Reported Issues Log", subtitle: "Track lyric corrections status", iconName: "exclamationmark.bubble")
+                    }
+                    
+                    if ChristmasCarolsService.shared.isAdmin {
+                        NavigationLink(destination: AdminControlsView()) {
+                            settingsRowLabel(title: "Admin Controls Panel", subtitle: "Lyrics, announcements, and configuration", iconName: "lock.shield")
+                        }
                     }
                     
                     Button {
@@ -168,12 +185,32 @@ public struct SettingsView: View {
                     }
                     .listRowBackground(Color.red.opacity(0.12))
                 }
+                
+                // Footer
+                Section {
+                    HStack {
+                        Spacer()
+                        Text("CSI Hymns v5.1.0")
+                            .font(.caption)
+                            .foregroundColor(theme.textSecondary)
+                            .onLongPressGesture(minimumDuration: 3.0) {
+                                let generator = UIImpactFeedbackGenerator(style: .heavy)
+                                generator.impactOccurred()
+                                showAdminControls = true
+                            }
+                        Spacer()
+                    }
+                }
+                .listRowBackground(Color.clear)
             }
             .scrollContentBackground(.hidden)
             .foregroundColor(theme.textPrimary)
         }
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(isPresented: $showAdminControls) {
+            AdminControlsView()
+        }
         .csiGlassNavigationBar(theme: theme)
         .toolbar(.hidden, for: .tabBar) // Hide Bottom Tabbar
         .alert("Delete Account?", isPresented: $isShowingDeleteAlert) {

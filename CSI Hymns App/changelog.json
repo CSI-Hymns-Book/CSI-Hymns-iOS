@@ -1,0 +1,20 @@
+[
+    {
+        "title": "iOS Native Code Rewrite, M.T. Hymns, MIDI Playback & Admin Tools ⛪🎶",
+        "version": "5.1.0",
+        "date": "15-07-2026",
+        "changes": [
+            "HOTFIX — Fix App Icon not displaying properly outlining border on native assets",
+            "NEW Local-first architecture — offline caches/seeds load instantly with background auto-sync checks every 3 days",
+            "NEW Split-pane landscape Liturgies layout — view Order of Service cards and description details side-by-side without scrolling",
+            "NEW Taptic Engine haptic feedback — realistic selection ticks and tap feedback on playback sliders, steppers, and audio controls",
+            "NEW Announcement Retrigger option for admin tools and centered pop-up dialog overlays",
+            "NEW Mangalore Tunes (M.T.) Hymns section — browse the full M.T. Hymns book with lyrics, categories, favorites, and search",
+            "NEW MIDI Playback Engine — listen to hymn tunes with realistic 4-channel independent SATB routing and customizable instrument sound",
+            "NEW Section Selector Screen — choose between CSI Hymns & Keerthanes or M.T. Hymns with beautiful cards and Kannada subtitles",
+            "NEW Hide/Show Actions pill button on Hymn Detail — collapse playback and actions toolbar for distraction-free reading",
+            "General stability improvements, visual transition animations, and edge-swipe gestures to pop navigation",
+            "Thank you for using CSI Hymns! Report any issues from the app or Settings"
+        ]
+    }
+]
