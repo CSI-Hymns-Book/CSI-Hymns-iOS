@@ -35,7 +35,15 @@ public final class SupabaseService {
         public let privacyPolicyAccepted: Bool
     }
     
-    public var currentUser: AppUser? = nil
+    public var currentUser: AppUser? = nil {
+        didSet {
+            if let user = currentUser {
+                PostHogService.shared.identify(userId: user.id.uuidString)
+            } else {
+                PostHogService.shared.reset()
+            }
+        }
+    }
     /// Resolved display name for Settings and profile card (matches Edit Profile source).
     public private(set) var displayName: String = "CSI Devotional User"
     

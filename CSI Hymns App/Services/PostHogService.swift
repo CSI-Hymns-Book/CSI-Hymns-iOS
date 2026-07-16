@@ -8,7 +8,18 @@ public final class PostHogService: Sendable {
     
     private let apiKey: String?
     private let host: String
-    private let distinctId: String
+    private var distinctId: String {
+        if let identified = UserDefaults.standard.string(forKey: "csi_analytics_identified_uid") {
+            return identified
+        }
+        let key = "csi_analytics_distinct_id"
+        if let existing = UserDefaults.standard.string(forKey: key) {
+            return existing
+        }
+        let newId = UUID().uuidString
+        UserDefaults.standard.set(newId, forKey: key)
+        return newId
+    }
     
     private init() {
         // Load configurations securely from Secrets.plist
@@ -26,17 +37,27 @@ public final class PostHogService: Sendable {
         self.apiKey = loadedKey
         self.host = loadedHost
         
-        // Generate or retrieve a persistent anonymous distinct ID for this installation
+        print("PostHogService: Initialized")
+    }
+    
+    /// Identifies the user in PostHog by linking their anonymous ID with their Supabase UUID.
+    public func identify(userId: String) {
         let key = "csi_analytics_distinct_id"
-        if let existing = UserDefaults.standard.string(forKey: key) {
-            self.distinctId = existing
-        } else {
-            let newId = UUID().uuidString
-            UserDefaults.standard.set(newId, forKey: key)
-            self.distinctId = newId
-        }
+        let anonId = UserDefaults.standard.string(forKey: key) ?? UUID().uuidString
+        UserDefaults.standard.set(anonId, forKey: key)
         
-        print("PostHogService: Initialized with distinct ID: \(self.distinctId)")
+        UserDefaults.standard.set(userId, forKey: "csi_analytics_identified_uid")
+        
+        track(event: "$identify", properties: [
+            "$anon_distinct_id": anonId
+        ])
+    }
+    
+    /// Resets the user identity, reverting to a new anonymous ID.
+    public func reset() {
+        UserDefaults.standard.removeObject(forKey: "csi_analytics_identified_uid")
+        let newAnonId = UUID().uuidString
+        UserDefaults.standard.set(newAnonId, forKey: "csi_analytics_distinct_id")
     }
     
     /// Tracks an event with custom properties.
