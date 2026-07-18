@@ -25,7 +25,14 @@ public struct AirPlayRoutePicker: UIViewRepresentable {
 @Observable
 public final class HymnDetailViewModel {
     public var selectedLanguage: SongLanguage = .kannada
-    public var fontSize: CGFloat = 18.0
+    public var fontSize: CGFloat = {
+        let savedSize = UserDefaults.standard.double(forKey: "global_lyrics_font_size")
+        return savedSize == 0 ? 18.0 : CGFloat(savedSize)
+    }() {
+        didSet {
+            UserDefaults.standard.set(Double(fontSize), forKey: "global_lyrics_font_size")
+        }
+    }
     public var isShowingReportSheet = false
     public var reportDescription = ""
     public var isReportSubmitting = false
@@ -119,7 +126,7 @@ public struct HymnDetailView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .opacity(isViewReady ? 1.0 : 0.0)
                         
-                        if !isHidden {
+                        if !isHidden || isAudioPlayerVisible {
                             // Split Divider
                             Rectangle()
                                 .fill(theme.strokeColor)
@@ -129,11 +136,13 @@ public struct HymnDetailView: View {
                             // Right Column: Controls and Audio Player
                             ScrollView(showsIndicators: false) {
                                 VStack(spacing: 16) {
-                                    sidebarToolbarRow
-                                    
-                                    metadataHeaderCard
-                                    
-                                    sidebarSettingsPanel
+                                    if !isHidden {
+                                        sidebarToolbarRow
+                                        
+                                        metadataHeaderCard
+                                        
+                                        sidebarSettingsPanel
+                                    }
                                     
                                     if isAudioPlayerVisible {
                                         if hymn.type == "mt" {
@@ -190,7 +199,7 @@ public struct HymnDetailView: View {
                         .offset(y: isViewReady ? 0 : 15)
                         
                         // Integrated glassmorphic player
-                        if isAudioPlayerVisible && !isHidden {
+                        if isAudioPlayerVisible {
                             if hymn.type == "mt" {
                                 glassmorphicMidiPlayer(isEmbedded: false)
                                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -306,7 +315,6 @@ public struct HymnDetailView: View {
         }
         .onAppear {
             let progress = ReadingProgressService.load(itemType: hymn.type, itemId: "\(hymn.number)")
-            if let font = progress.fontSize { viewModel.fontSize = CGFloat(font) }
             if let lang = progress.language {
                 viewModel.selectedLanguage = lang == "english" ? .english : .kannada
             }
@@ -1089,17 +1097,31 @@ public struct HymnDetailView: View {
                         .foregroundColor(theme.textSecondary)
                         .frame(width: 44)
                 }
-                
-                // Advanced Options
-                Button {
-                    isShowingAdvancedMidi = true
-                } label: {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.system(size: 18))
-                        .foregroundColor(theme.textPrimary)
-                }
-                .buttonStyle(.hapticLight)
             }
+            
+            // Advanced Audio Options
+            Button {
+                HapticsManager.shared.triggerSelection()
+                isShowingAdvancedMidi = true
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("Advanced Audio Options")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(theme.surfaceColor)
+                .cornerRadius(10)
+                .foregroundColor(theme.textPrimary)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(theme.strokeColor, lineWidth: 1)
+                )
+            }
+            .buttonStyle(.hapticMedium)
+            .padding(.top, 4)
         }
         .padding(.vertical, 16)
         .padding(.horizontal, 12)
