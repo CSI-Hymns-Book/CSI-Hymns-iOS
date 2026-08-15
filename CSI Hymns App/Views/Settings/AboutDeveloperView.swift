@@ -95,7 +95,7 @@ public struct AboutDeveloperView: View {
     
     private var actionLinksList: some View {
         VStack(spacing: 12) {
-            NavigationLink(destination: PrivacyPolicyView()) {
+            NavigationLink(destination: LegalDocumentView(kind: .privacy)) {
                 HStack(spacing: 14) {
                     ZStack {
                         RoundedRectangle(cornerRadius: 10)
@@ -114,6 +114,41 @@ public struct AboutDeveloperView: View {
                             .foregroundColor(theme.textPrimary)
                         
                         Text("Required for Google/Apple OAuth screens")
+                            .font(.system(size: 11))
+                            .foregroundColor(theme.textSecondary)
+                    }
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .foregroundColor(theme.textSecondary.opacity(0.5))
+                        .font(.system(size: 12, weight: .bold))
+                }
+                .padding(12)
+                .background(theme.cardBackground)
+                .cornerRadius(12)
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(theme.cardStroke, lineWidth: 1))
+            }
+            .buttonStyle(PlainButtonStyle())
+            
+            NavigationLink(destination: LegalDocumentView(kind: .terms)) {
+                HStack(spacing: 14) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color.blue.opacity(0.12))
+                            .frame(width: 40, height: 40)
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.blue.opacity(0.25), lineWidth: 1))
+                        
+                        Image(systemName: "doc.text.fill")
+                            .foregroundColor(Color.blue)
+                            .font(.system(size: 16, weight: .bold))
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("View Terms of Use")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(theme.textPrimary)
+                        
+                        Text("Licence, acceptable use, and governing law")
                             .font(.system(size: 11))
                             .foregroundColor(theme.textSecondary)
                     }

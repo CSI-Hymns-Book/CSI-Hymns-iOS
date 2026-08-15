@@ -1,4 +1,5 @@
 import SwiftUI
+import Observation
 
 #if canImport(OneSignalFramework)
 import OneSignalFramework
@@ -14,6 +15,7 @@ struct CSIHymnsApp: App {
     @State private var isShowingOnboarding = false
     @State private var forceUpdate: ForceUpdateDecision? = nil
     @State private var hasRequestedPushPermission = false
+    @Bindable private var consent = ConsentManager.shared
     
     // Core release info parsed dynamically from changelog.json
     private var activeRelease: ChangelogRelease {
@@ -79,9 +81,23 @@ struct CSIHymnsApp: App {
                         }) {
                             OnboardingView()
                         }
+                        .fullScreenCover(isPresented: Binding(
+                            get: { !consent.hasValidRequiredConsent },
+                            set: { _ in }
+                        )) {
+                            ConsentGateView()
+                        }
                         .onAppear {
-                            checkOnboardingOrChangelog()
-                            requestPushPermissionIfNeeded()
+                            if consent.hasValidRequiredConsent {
+                                checkOnboardingOrChangelog()
+                                requestPushPermissionIfNeeded()
+                            }
+                        }
+                        .onChange(of: consent.hasValidRequiredConsent) { _, accepted in
+                            if accepted {
+                                checkOnboardingOrChangelog()
+                                requestPushPermissionIfNeeded()
+                            }
                         }
                 }
             }
@@ -140,8 +156,10 @@ struct CSIHymnsApp: App {
     
     /// Requests push permission after the first frame so iOS 27 beta lifecycle is stable.
     private func requestPushPermissionIfNeeded() {
+        guard consent.pushConsent else { return }
         guard !hasRequestedPushPermission else { return }
         hasRequestedPushPermission = true
+        AppDelegate.startOneSignalIfNeeded()
         
         #if canImport(OneSignalFramework)
         OneSignal.Notifications.requestPermission({ accepted in

@@ -13,7 +13,6 @@ struct OnboardingSlide: Identifiable, Sendable {
 public struct OnboardingView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var currentIndex = 0
-    @State private var privacyAccepted = false
     
     private let slides = [
         OnboardingSlide(
@@ -58,7 +57,7 @@ public struct OnboardingView: View {
                 // Skip Button
                 HStack {
                     Spacer()
-                    Button("Skip") {
+                    Button("Skip tour") {
                         completeOnboarding()
                     }
                     .font(.system(size: 15, weight: .bold))
@@ -73,14 +72,12 @@ public struct OnboardingView: View {
                         slideCardView(slides[index])
                             .tag(index)
                     }
-                    privacyConsentSlide
-                        .tag(slides.count)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .always))
                 
                 // Bottom Stepper Controllers
                 HStack {
-                    if currentIndex < slides.count {
+                    if currentIndex < slides.count - 1 {
                         Button {
                             withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
                                 currentIndex += 1
@@ -103,10 +100,9 @@ public struct OnboardingView: View {
                                 .foregroundColor(.black)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
-                                .background(privacyAccepted ? Color.white : Color.white.opacity(0.35))
+                                .background(Color.white)
                                 .cornerRadius(12)
                         }
-                        .disabled(!privacyAccepted)
                         .transition(.scale.combined(with: .opacity))
                     }
                 }
@@ -150,45 +146,11 @@ public struct OnboardingView: View {
     
     // MARK: - Handlers
     
-    private var privacyConsentSlide: some View {
-        VStack(spacing: 20) {
-            Text("🔒")
-                .font(.system(size: 64))
-            Text("Privacy Policy")
-                .font(.system(size: 26, weight: .black))
-                .foregroundColor(.white)
-            Text("We respect your privacy. Please review and accept our policy to continue.")
-                .font(.system(size: 14))
-                .foregroundColor(.white.opacity(0.65))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 24)
-            
-            NavigationLink(destination: PrivacyPolicyView()) {
-                Text("Read Privacy Policy")
-                    .font(.system(size: 14, weight: .semibold))
-                    .underline()
-            }
-            
-            Button {
-                privacyAccepted.toggle()
-            } label: {
-                HStack {
-                    Image(systemName: privacyAccepted ? "checkmark.square.fill" : "square")
-                    Text("I accept the Privacy Policy")
-                }
-                .foregroundColor(.white)
-            }
-            Spacer()
-        }
-        .padding(.top, 20)
-    }
-    
     private func completeOnboarding() {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
         
         UserDefaults.standard.set(true, forKey: "csi_has_seen_onboarding_v1")
-        UserDefaults.standard.set(privacyAccepted ? 1 : 0, forKey: "csi_privacy_accepted_local")
         UserDefaults.standard.set(true, forKey: "csi_pending_menu_showcase")
         dismiss()
     }

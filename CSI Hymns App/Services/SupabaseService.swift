@@ -38,7 +38,9 @@ public final class SupabaseService {
     public var currentUser: AppUser? = nil {
         didSet {
             if let user = currentUser {
-                PostHogService.shared.identify(userId: user.id.uuidString)
+                if ConsentManager.shared.analyticsConsent {
+                    PostHogService.shared.identify(userId: user.id.uuidString)
+                }
             } else {
                 PostHogService.shared.reset()
             }
@@ -346,13 +348,13 @@ public final class SupabaseService {
                 .single()
                 .execute()
                 .value
-            return (profile.privacyPolicyAccepted ?? 1) == 1
+            return (profile.privacyPolicyAccepted ?? 0) == 1
         } catch {
-            print("SupabaseService: fetchPrivacyAcceptance failed or profile missing: \(error). Falling back to true.")
-            return true
+            print("SupabaseService: fetchPrivacyAcceptance failed or profile missing: \(error). Falling back to local consent.")
+            return ConsentManager.shared.hasValidRequiredConsent
         }
         #else
-        return true
+        return ConsentManager.shared.hasValidRequiredConsent
         #endif
     }
     
@@ -453,11 +455,75 @@ public final class SupabaseService {
         #endif
     }
     
-    /// After sign-in, push locally stored onboarding privacy choice to Supabase.
+    /// Persists the DPDP consent artefact on the user profile row.
+    public func syncConsentArtefact(
+        requiredAccepted: Bool,
+        analytics: Bool,
+        push: Bool,
+        version: String?,
+        recordedAt: Date?,
+        artefact: [String: Any]
+    ) async {
+        guard currentUser != nil else { return }
+        await setPrivacyPolicyAcceptedInProfile(requiredAccepted)
+        #if canImport(Supabase)
+        guard let user = currentUser else { return }
+        struct ConsentPayload: Encodable {
+            let policy_version: String
+            let recorded_at: String
+            let language: String
+            let privacy_accepted: Bool
+            let terms_accepted: Bool
+            let age_confirmed: Bool
+            let analytics: Bool
+            let push_notifications: Bool
+            let notice: String
+        }
+        struct ConsentUpdate: Encodable {
+            let terms_accepted: Int
+            let analytics_consent: Bool
+            let push_consent: Bool
+            let consent_version: String?
+            let consent_recorded_at: String?
+            let consent_artefact: ConsentPayload
+        }
+        let iso = recordedAt.map { ISO8601DateFormatter().string(from: $0) } ?? ISO8601DateFormatter().string(from: Date())
+        let payload = ConsentPayload(
+            policy_version: version ?? ConsentManager.currentPolicyVersion,
+            recorded_at: iso,
+            language: (artefact["language"] as? String) ?? "en",
+            privacy_accepted: requiredAccepted,
+            terms_accepted: requiredAccepted,
+            age_confirmed: requiredAccepted,
+            analytics: analytics,
+            push_notifications: push,
+            notice: (artefact["notice"] as? String) ?? ""
+        )
+        do {
+            try await client.from("users").update(ConsentUpdate(
+                terms_accepted: requiredAccepted ? 1 : 0,
+                analytics_consent: analytics,
+                push_consent: push,
+                consent_version: version,
+                consent_recorded_at: iso,
+                consent_artefact: payload
+            ))
+            .eq("auth_uid", value: user.id.uuidString)
+            .execute()
+        } catch {
+            print("SupabaseService: syncConsentArtefact failed: \(error)")
+        }
+        #endif
+    }
+    
+    /// After sign-in, push locally stored consent to Supabase.
+    public func syncConsentFromLocalPrefs() async {
+        await ConsentManager.shared.syncToProfile()
+    }
+    
+    /// Legacy name used by older call sites.
     public func syncPrivacyPolicyFromLocalPrefs() async {
-        let value = UserDefaults.standard.object(forKey: "csi_privacy_accepted_local") as? Int
-        guard let value else { return }
-        await setPrivacyPolicyAcceptedInProfile(value == 1)
+        await syncConsentFromLocalPrefs()
     }
     
     /// Syncs local bookmarks to Supabase on request.
