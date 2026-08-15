@@ -46,7 +46,7 @@ public final class SupabaseService {
             }
         }
     }
-    /// Resolved display name for Settings and profile card (matches Edit Profile source).
+    /// Resolved display name for Settings and the profile screen.
     public private(set) var displayName: String = "CSI Devotional User"
     
     private init() {
@@ -158,15 +158,22 @@ public final class SupabaseService {
                 print("SupabaseService: Stored session expired — starting signed out.")
             } else {
                 let user = session.user
-                let accepted = await fetchPrivacyAcceptance(authUid: user.id)
-                self.currentUser = AppUser(
-                    id: user.id,
-                    email: user.email,
-                    fullName: Self.stringFromUserMetadata(user.userMetadata["full_name"])
-                        ?? Self.stringFromUserMetadata(user.userMetadata["name"]),
-                    privacyPolicyAccepted: accepted
-                )
-                await refreshDisplayName()
+                if await isAccountDeleted(authUid: user.id) {
+                    try? await client.auth.signOut()
+                    self.currentUser = nil
+                    await refreshDisplayName()
+                    print("SupabaseService: Deactivated account session cleared.")
+                } else {
+                    let accepted = await fetchPrivacyAcceptance(authUid: user.id)
+                    self.currentUser = AppUser(
+                        id: user.id,
+                        email: user.email,
+                        fullName: Self.stringFromUserMetadata(user.userMetadata["full_name"])
+                            ?? Self.stringFromUserMetadata(user.userMetadata["name"]),
+                        privacyPolicyAccepted: accepted
+                    )
+                    await refreshDisplayName()
+                }
             }
         } catch AuthError.sessionMissing {
             // Expected when no user is signed in (fresh install / signed-out state).
@@ -185,6 +192,7 @@ public final class SupabaseService {
         #if canImport(Supabase)
         let response = try await client.auth.signIn(email: email, password: password)
         let user = response.user
+        try await ensureAccountIsActive(authUid: user.id)
         let accepted = await fetchPrivacyAcceptance(authUid: user.id)
         
         await MainActor.run {
@@ -250,7 +258,7 @@ public final class SupabaseService {
         #endif
     }
     
-    /// Loads the same display name shown in Edit Profile for Settings and other UI.
+    /// Loads the same display name shown on the Profile screen for Settings and other UI.
     public func refreshDisplayName() async {
         guard isAuthenticated else {
             displayName = "Guest Account"
@@ -293,12 +301,7 @@ public final class SupabaseService {
         await refreshDisplayName()
     }
     
-    /// Fully deletes the user account using an RPC backend delete call.
-    ///
-    /// Mirrors the Flutter client: the RPC takes no parameters and resolves the
-    /// caller via `auth.uid()` server-side. Any 403 / "user not found" error after
-    /// deletion is expected (the session belongs to a now-deleted user) and is
-    /// treated as success. The local session is always cleared afterwards.
+    /// Soft-deletes the account (profile flagged deleted; auth login is kept but blocked in-app).
     public func deleteUserAccount() async throws {
         guard currentUser != nil else { return }
         
@@ -329,6 +332,100 @@ public final class SupabaseService {
             || message.contains("user not found")
             || message.contains("403")
             || message.contains("forbidden")
+    }
+    
+    public func isAccountDeleted(authUid: UUID) async -> Bool {
+        #if canImport(Supabase)
+        do {
+            let deleted: Bool = try await client.rpc("is_my_account_deleted").execute().value
+            return deleted
+        } catch {
+            struct Row: Codable { let deleted: Bool? }
+            do {
+                let row: Row = try await client.from("users")
+                    .select("deleted")
+                    .eq("auth_uid", value: authUid.uuidString)
+                    .single()
+                    .execute()
+                    .value
+                return row.deleted == true
+            } catch {
+                return false
+            }
+        }
+        #else
+        return false
+        #endif
+    }
+    
+    /// Fetches this signed-in user's stored data (server-enforced: own rows only, 15-minute rate limit).
+    public func exportMyDataJSON() async throws -> Data {
+        #if canImport(Supabase)
+        let response = try await client.rpc("export_my_data").execute()
+        return response.data
+        #else
+        throw NSError(domain: "SupabaseService", code: 501, userInfo: [NSLocalizedDescriptionKey: "Export is unavailable in this build."])
+        #endif
+    }
+    
+    public func exportMyDataZipURL() async throws -> URL {
+        let raw = try await exportMyDataJSON()
+        let json = Self.prettyJSON(raw)
+        let readme = Data("""
+        CSI Hymns — your information
+
+        This zip contains the data we store about your account, including user id, name, email, favourites, custom lists, support tickets, and consent records.
+
+        Profile picture: none is stored in the database.
+
+        """.utf8)
+        let zip = SimpleZipArchive.make(files: [
+            ("my-data.json", json),
+            ("README.txt", readme)
+        ])
+        let stamp = ISO8601DateFormatter().string(from: Date())
+            .replacingOccurrences(of: ":", with: "-")
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("csi-hymns-my-information-\(stamp).zip")
+        try zip.write(to: url)
+        return url
+    }
+    
+    public static func isDataExportRateLimited(_ error: Error) -> Bool {
+        let message = error.localizedDescription.lowercased()
+        return message.contains("export_rate_limited")
+            || message.contains("rate_limited")
+            || message.contains("p0001")
+    }
+    
+    private func ensureAccountIsActive(authUid: UUID) async throws {
+        if await isAccountDeleted(authUid: authUid) {
+            #if canImport(Supabase)
+            try? await client.auth.signOut()
+            #endif
+            currentUser = nil
+            await refreshDisplayName()
+            throw NSError(
+                domain: "SupabaseService",
+                code: 410,
+                userInfo: [NSLocalizedDescriptionKey: "This account has been deactivated. Contact support if you need help."]
+            )
+        }
+    }
+    
+    private static func prettyJSON(_ data: Data) -> Data {
+        var payload = data
+        if let object = try? JSONSerialization.jsonObject(with: payload) {
+            if let encoded = object as? String, let inner = encoded.data(using: .utf8) {
+                payload = inner
+            }
+        }
+        guard let object = try? JSONSerialization.jsonObject(with: payload),
+              JSONSerialization.isValidJSONObject(object),
+              let pretty = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys]) else {
+            return payload
+        }
+        return pretty
     }
     
     // MARK: - Synchronizations & Queries
@@ -774,6 +871,7 @@ public final class SupabaseService {
                         
                         // Hydrate user profile details
                         let user = try await self.client.auth.session.user
+                        try await self.ensureAccountIsActive(authUid: user.id)
                         let accepted = await self.fetchPrivacyAcceptance(authUid: user.id)
                         self.currentUser = AppUser(
                             id: user.id,
@@ -817,6 +915,7 @@ public final class SupabaseService {
         )
         
         let user = response.user
+        try await ensureAccountIsActive(authUid: user.id)
         let accepted = await fetchPrivacyAcceptance(authUid: user.id)
         let metadataName = Self.stringFromUserMetadata(user.userMetadata["full_name"])
             ?? Self.stringFromUserMetadata(user.userMetadata["name"])

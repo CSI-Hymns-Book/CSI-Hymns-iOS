@@ -3,9 +3,13 @@ import SwiftUI
 /// Review, withdraw, or change optional processing — comparable ease to original consent.
 public struct PrivacyCentreView: View {
     @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
     @State private var theme = ThemeManager.shared
     @State private var consent = ConsentManager.shared
+    @State private var supabase = SupabaseService.instance
     @State private var showWithdrawConfirm = false
+    @State private var showPushDeclineDialog = false
+    @State private var osPushGranted = false
     
     public init() {}
     
@@ -56,12 +60,17 @@ public struct PrivacyCentreView: View {
                 } header: {
                     Text("Optional processing").foregroundColor(theme.textSecondary)
                 } footer: {
-                    Text("These are off unless you opt in. Turning them off does not remove hymn access.")
+                    Text("These help us improve the app. You can turn them off any time. Hymn reading still works.")
                         .foregroundColor(theme.textSecondary)
                 }
                 .listRowBackground(theme.cardBackground)
                 
                 Section {
+                    if supabase.isAuthenticated {
+                        NavigationLink(destination: ProfileEditView()) {
+                            settingsLabel("Download or deactivate account", "person.crop.circle")
+                        }
+                    }
                     Button {
                         if let url = URL(string: "mailto:\(ConsentManager.grievanceEmail)?subject=DPDP%20rights%20request") {
                             openURL(url)
@@ -112,6 +121,21 @@ public struct PrivacyCentreView: View {
         } message: {
             Text("You will be signed out and asked to review the notice again. Optional analytics and notifications stop immediately.")
         }
+        .alert("Keep notifications on?", isPresented: $showPushDeclineDialog) {
+            Button("Keep on", role: .cancel) {}
+            Button("Turn off", role: .destructive) {
+                consent.setPushConsent(false)
+                osPushGranted = false
+            }
+        } message: {
+            Text("Notifications are important — they help keep you updated. We do not send unwanted content.")
+        }
+        .task { await refreshPushFromSystem() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                Task { await refreshPushFromSystem() }
+            }
+        }
     }
     
     private var analyticsBinding: Binding<Bool> {
@@ -123,9 +147,27 @@ public struct PrivacyCentreView: View {
     
     private var pushBinding: Binding<Bool> {
         Binding(
-            get: { consent.pushConsent },
-            set: { consent.setPushConsent($0) }
+            get: { consent.pushConsent && osPushGranted },
+            set: { enabled in
+                if enabled {
+                    Task {
+                        let granted = await consent.requestOsPushPermission()
+                        osPushGranted = granted
+                        if !granted {
+                            showPushDeclineDialog = true
+                        }
+                    }
+                } else {
+                    showPushDeclineDialog = true
+                }
+            }
         )
+    }
+    
+    private func refreshPushFromSystem() async {
+        osPushGranted = await consent.hasOsNotificationPermission()
+        await consent.syncPushConsentWithOsPermission()
+        osPushGranted = await consent.hasOsNotificationPermission()
     }
     
     private func settingsLabel(_ title: String, _ icon: String) -> some View {

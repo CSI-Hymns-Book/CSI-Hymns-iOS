@@ -42,7 +42,7 @@ public struct SettingsView: View {
                     profileCard
                     if supabase.isAuthenticated {
                         NavigationLink(destination: ProfileEditView()) {
-                            settingsRowLabel(title: "Edit Profile", subtitle: "Change display name or delete account", iconName: "person.crop.circle")
+                            settingsRowLabel(title: "Profile", subtitle: "Name, download your information, deactivate account", iconName: "person.crop.circle")
                         }
                     }
                 }
@@ -202,7 +202,7 @@ public struct SettingsView: View {
                                     ProgressView()
                                         .tint(.red)
                                 } else {
-                                    Text("Delete Account")
+                                    Text("Deactivate Account")
                                         .font(.system(size: 15, weight: .bold))
                                 }
                                 Spacer()
@@ -239,15 +239,15 @@ public struct SettingsView: View {
         }
         .csiGlassNavigationBar(theme: theme)
         .toolbar(.hidden, for: .tabBar) // Hide Bottom Tabbar
-        .alert("Delete Account?", isPresented: $isShowingDeleteAlert) {
+        .alert("Deactivate Account?", isPresented: $isShowingDeleteAlert) {
             Button("Cancel", role: .cancel) {}
-            Button("Delete Everything", role: .destructive) {
+            Button("Deactivate", role: .destructive) {
                 Task {
                     await deleteAccountCascade()
                 }
             }
         } message: {
-            Text("This action cannot be undone. All your custom category lists, bookmarks, and account profiles will be wiped off Supabase servers instantly.")
+            Text("You will be signed out and the account will be marked as deactivated. Your record is kept internally and is not permanently erased.")
         }
         .alert("Clear Caches?", isPresented: $isShowingClearCacheAlert) {
             Button("Cancel", role: .cancel) {}

@@ -1,6 +1,7 @@
 import SwiftUI
+import UIKit
 
-/// Profile editing screen — display name, account deletion (Flutter parity).
+/// Account profile: name, email, download stored information, and soft-deactivate.
 public struct ProfileEditView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var theme = ThemeManager.shared
@@ -10,8 +11,10 @@ public struct ProfileEditView: View {
     @State private var isLoading = true
     @State private var isSaving = false
     @State private var isDeleting = false
+    @State private var isExporting = false
     @State private var showDeleteConfirm = false
     @State private var errorMessage: String?
+    @State private var shareItem: IdentifiableURL?
     
     public init() {}
     
@@ -26,10 +29,19 @@ public struct ProfileEditView: View {
                 ProgressView().tint(theme.accentColor)
             } else {
                 Form {
-                    Section("Profile") {
+                    Section {
                         TextField("Full name", text: $fullName)
-                        Text(email)
-                            .foregroundStyle(theme.textSecondary)
+                        HStack {
+                            Text("Email")
+                            Spacer()
+                            Text(email.isEmpty ? "—" : email)
+                                .foregroundStyle(theme.textSecondary)
+                                .multilineTextAlignment(.trailing)
+                        }
+                    } header: {
+                        Text("Profile")
+                    } footer: {
+                        Text("Email comes from your sign-in and cannot be changed here. We do not store a profile picture.")
                     }
                     
                     Section {
@@ -39,10 +51,27 @@ public struct ProfileEditView: View {
                             if isSaving {
                                 ProgressView()
                             } else {
-                                Text("Save Changes")
+                                Text("Save name")
                             }
                         }
                         .disabled(fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving)
+                    }
+                    
+                    Section {
+                        Button {
+                            Task { await downloadMyInformation() }
+                        } label: {
+                            HStack {
+                                if isExporting {
+                                    ProgressView()
+                                } else {
+                                    Label("Download my information", systemImage: "square.and.arrow.down")
+                                }
+                            }
+                        }
+                        .disabled(isExporting)
+                    } footer: {
+                        Text("We’ll pack the data we store about you into a zip file. You can download this once every 15 minutes.")
                     }
                     
                     Section {
@@ -52,32 +81,37 @@ public struct ProfileEditView: View {
                             if isDeleting {
                                 ProgressView().tint(.red)
                             } else {
-                                Text("Delete Account")
+                                Text("Deactivate account")
                             }
                         }
                         .disabled(isDeleting)
+                    } footer: {
+                        Text("This signs you out and marks the account as deactivated. Your record is kept internally and is not permanently erased.")
                     }
                 }
                 .scrollContentBackground(.hidden)
             }
         }
-        .navigationTitle("Edit Profile")
+        .navigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
-        .alert("Delete Account?", isPresented: $showDeleteConfirm) {
+        .alert("Deactivate this account?", isPresented: $showDeleteConfirm) {
             Button("Cancel", role: .cancel) {}
-            Button("Delete", role: .destructive) {
+            Button("Deactivate", role: .destructive) {
                 Task { await deleteAccount() }
             }
         } message: {
-            Text("This permanently deletes your account and cannot be undone.")
+            Text("You will be signed out. The account stays in our records as deactivated. This is not a permanent erase.")
         }
-        .alert("Error", isPresented: Binding(
+        .alert("Couldn’t complete", isPresented: Binding(
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }
         )) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(errorMessage ?? "")
+        }
+        .sheet(item: $shareItem) { item in
+            ActivityShareSheet(items: [item.url])
         }
         .task { await loadProfile() }
     }
@@ -96,11 +130,24 @@ public struct ProfileEditView: View {
         isSaving = true
         do {
             try await supabase.upsertProfile(fullName: fullName.trimmingCharacters(in: .whitespacesAndNewlines))
-            dismiss()
         } catch {
             errorMessage = error.localizedDescription
         }
         isSaving = false
+    }
+    
+    private func downloadMyInformation() async {
+        isExporting = true
+        do {
+            shareItem = IdentifiableURL(url: try await supabase.exportMyDataZipURL())
+        } catch {
+            if SupabaseService.isDataExportRateLimited(error) {
+                errorMessage = "Please wait 15 minutes before downloading your information again."
+            } else {
+                errorMessage = error.localizedDescription
+            }
+        }
+        isExporting = false
     }
     
     private func deleteAccount() async {
@@ -113,4 +160,24 @@ public struct ProfileEditView: View {
         }
         isDeleting = false
     }
+}
+
+private struct IdentifiableURL: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+private struct ActivityShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+    
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        if let popover = controller.popoverPresentationController {
+            popover.sourceView = UIView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
+            popover.permittedArrowDirections = []
+        }
+        return controller
+    }
+    
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }

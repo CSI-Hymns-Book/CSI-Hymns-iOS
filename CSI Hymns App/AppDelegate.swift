@@ -15,9 +15,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         Self.launchOptions = launchOptions
-        if UserDefaults.standard.bool(forKey: ConsentStorageKeys.push) {
-            Self.startOneSignalIfNeeded()
-        }
+        Self.startOneSignalIfNeeded()
         return true
     }
     

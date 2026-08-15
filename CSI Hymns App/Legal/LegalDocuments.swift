@@ -1,6 +1,6 @@
 import Foundation
 
-public enum LegalDocumentKind: String, CaseIterable, Identifiable {
+public enum LegalDocumentKind: String, CaseIterable, Identifiable, Hashable {
     case privacy
     case terms
     public var id: String { rawValue }
@@ -136,7 +136,8 @@ public enum LegalDocuments {
         You may:
         • access a summary of personal data we hold about you;
         • request correction of inaccurate data;
-        • request erasure (including Delete Account in Settings);
+        • request erasure (including Deactivate account in Profile);
+        • download a copy of account data (Download my information in Profile);
         • withdraw consent;
         • nominate another person to exercise rights in the event of death or incapacity (email us with the nominee’s name and contact);
         • seek grievance redressal from us, and complain to the Data Protection Board of India if unresolved.

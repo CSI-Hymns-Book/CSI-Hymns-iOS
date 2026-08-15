@@ -12,7 +12,6 @@ struct CSIHymnsApp: App {
     @State private var christmasMode = ChristmasModeService.shared
     @State private var themeManager = ThemeManager.shared
     @State private var isShowingWelcome = false
-    @State private var isShowingOnboarding = false
     @State private var forceUpdate: ForceUpdateDecision? = nil
     @State private var hasRequestedPushPermission = false
     @Bindable private var consent = ConsentManager.shared
@@ -76,26 +75,27 @@ struct CSIHymnsApp: App {
                                 UserDefaults.standard.set(activeRelease.version, forKey: "last_seen_changelog_version")
                             }
                         }
-                        .sheet(isPresented: $isShowingOnboarding, onDismiss: {
-                            checkChangelogLaunch()
-                        }) {
-                            OnboardingView()
-                        }
                         .fullScreenCover(isPresented: Binding(
-                            get: { !consent.hasValidRequiredConsent },
+                            get: { !consent.hasValidRequiredConsent || !consent.hasCompletedTour },
                             set: { _ in }
                         )) {
-                            ConsentGateView()
+                            OnboardingView()
                         }
                         .onAppear {
-                            if consent.hasValidRequiredConsent {
-                                checkOnboardingOrChangelog()
+                            if consent.hasValidRequiredConsent && consent.hasCompletedTour {
+                                checkChangelogLaunch()
                                 requestPushPermissionIfNeeded()
                             }
                         }
                         .onChange(of: consent.hasValidRequiredConsent) { _, accepted in
-                            if accepted {
-                                checkOnboardingOrChangelog()
+                            if accepted && consent.hasCompletedTour {
+                                checkChangelogLaunch()
+                                requestPushPermissionIfNeeded()
+                            }
+                        }
+                        .onChange(of: consent.hasCompletedTour) { _, done in
+                            if done && consent.hasValidRequiredConsent {
+                                checkChangelogLaunch()
                                 requestPushPermissionIfNeeded()
                             }
                         }
@@ -115,16 +115,6 @@ struct CSIHymnsApp: App {
                     BackgroundSyncService.shared.performBackgroundSync()
                 }
             }
-        }
-    }
-    
-    private func checkOnboardingOrChangelog() {
-        // Check onboarding first
-        let hasSeenOnboarding = UserDefaults.standard.bool(forKey: "csi_has_seen_onboarding_v1")
-        if !hasSeenOnboarding {
-            isShowingOnboarding = true
-        } else {
-            checkChangelogLaunch()
         }
     }
     
@@ -156,7 +146,6 @@ struct CSIHymnsApp: App {
     
     /// Requests push permission after the first frame so iOS 27 beta lifecycle is stable.
     private func requestPushPermissionIfNeeded() {
-        guard consent.pushConsent else { return }
         guard !hasRequestedPushPermission else { return }
         hasRequestedPushPermission = true
         AppDelegate.startOneSignalIfNeeded()

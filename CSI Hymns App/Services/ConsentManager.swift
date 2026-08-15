@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import UserNotifications
 
 #if canImport(OneSignalFramework)
 import OneSignalFramework
@@ -42,6 +43,7 @@ public final class ConsentManager {
     }
     
     public private(set) var hasValidRequiredConsent: Bool
+    public private(set) var hasCompletedTour: Bool
     public private(set) var analyticsConsent: Bool
     public private(set) var pushConsent: Bool
     public private(set) var recordedAt: Date?
@@ -67,6 +69,7 @@ public final class ConsentManager {
         acceptedVersion = UserDefaults.standard.string(forKey: Keys.version)
         recordedAt = UserDefaults.standard.object(forKey: Keys.recordedAt) as? Date
         hasValidRequiredConsent = false
+        hasCompletedTour = UserDefaults.standard.bool(forKey: "csi_has_seen_onboarding_v1")
         refreshValidity()
     }
     
@@ -77,13 +80,27 @@ public final class ConsentManager {
         let terms = defaults.bool(forKey: Keys.terms)
         let age = defaults.bool(forKey: Keys.age)
         hasValidRequiredConsent = versionOK && required && terms && age
+        if defaults.object(forKey: Keys.analytics) == nil, hasValidRequiredConsent {
+            defaults.set(true, forKey: Keys.analytics)
+        }
         analyticsConsent = defaults.bool(forKey: Keys.analytics)
         pushConsent = defaults.bool(forKey: Keys.push)
         acceptedVersion = defaults.string(forKey: Keys.version)
         recordedAt = defaults.object(forKey: Keys.recordedAt) as? Date
     }
     
-    /// Records free, specific, informed, unambiguous consent for the current policy version.
+    /// Agree to the current Privacy Policy and Terms. Analytics is enabled so we can improve the app.
+    /// Push uses the system permission prompt after this, not a separate tick.
+    public func acceptCurrentPolicy() {
+        acceptRequiredConsent(
+            analytics: true,
+            push: pushConsent,
+            ageConfirmed: true,
+            privacyAccepted: true,
+            termsAccepted: true
+        )
+    }
+    
     public func acceptRequiredConsent(
         analytics: Bool,
         push: Bool,
@@ -103,8 +120,16 @@ public final class ConsentManager {
         defaults.set(now, forKey: Keys.recordedAt)
         defaults.set(1, forKey: Keys.legacyPrivacy)
         refreshValidity()
-        applySideEffects(analytics: analytics, push: push)
+        if !analytics {
+            PostHogService.shared.reset()
+        }
         Task { await syncToProfile() }
+    }
+    
+    public func markTourCompleted() {
+        UserDefaults.standard.set(true, forKey: "csi_has_seen_onboarding_v1")
+        UserDefaults.standard.set(true, forKey: "csi_pending_menu_showcase")
+        hasCompletedTour = true
     }
     
     public func setAnalyticsConsent(_ enabled: Bool) {
@@ -121,6 +146,30 @@ public final class ConsentManager {
         pushConsent = enabled
         applyPushSideEffect(enabled)
         Task { await syncToProfile() }
+    }
+    
+    public func hasOsNotificationPermission() async -> Bool {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        switch settings.authorizationStatus {
+        case .authorized, .provisional, .ephemeral:
+            return true
+        default:
+            return false
+        }
+    }
+    
+    public func syncPushConsentWithOsPermission() async {
+        let granted = await hasOsNotificationPermission()
+        if granted != pushConsent {
+            setPushConsent(granted)
+        }
+    }
+    
+    public func requestOsPushPermission() async -> Bool {
+        let granted = (try? await UNUserNotificationCenter.current()
+            .requestAuthorization(options: [.alert, .sound, .badge])) ?? false
+        setPushConsent(granted)
+        return granted
     }
     
     /// Withdrawal of required consent is as easy as grant: one action. Optional processing stops immediately.

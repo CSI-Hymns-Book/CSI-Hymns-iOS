@@ -22,7 +22,7 @@ public final class AuthViewModel {
         guard password.count >= 6 else { return false }
         if isSignUp {
             guard !fullName.isEmpty else { return false }
-            guard acceptPrivacy, acceptTerms else { return false }
+            guard acceptPrivacy else { return false }
         } else {
             guard ConsentManager.shared.hasValidRequiredConsent else { return false }
         }
@@ -263,46 +263,31 @@ public struct AuthView: View {
     }
     
     private var privacyAgreementRow: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             Button {
                 viewModel.acceptPrivacy.toggle()
+                viewModel.acceptTerms = viewModel.acceptPrivacy
             } label: {
                 HStack(alignment: .top, spacing: 12) {
                     Image(systemName: viewModel.acceptPrivacy ? "checkmark.square.fill" : "square")
-                        .font(.system(size: 20))
+                        .font(.system(size: 22))
                         .foregroundColor(viewModel.acceptPrivacy ? .white : .white.opacity(0.4))
-                    Text("I consent to processing of my account data as described in the Privacy Policy.")
-                        .font(.system(size: 13, weight: .medium))
+                    Text("I agree to the Privacy Policy and Terms of Use.")
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.white)
                         .multilineTextAlignment(.leading)
                     Spacer()
                 }
             }
-            Button {
-                viewModel.acceptTerms.toggle()
-            } label: {
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: viewModel.acceptTerms ? "checkmark.square.fill" : "square")
-                        .font(.system(size: 20))
-                        .foregroundColor(viewModel.acceptTerms ? .white : .white.opacity(0.4))
-                    Text("I accept the Terms of Use.")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.white)
-                    Spacer()
-                }
-            }
             HStack(spacing: 16) {
                 NavigationLink(destination: LegalDocumentView(kind: .privacy)) {
-                    Text("Privacy Policy")
-                        .font(.system(size: 12))
-                        .underline()
+                    Text("Privacy Policy").underline()
                 }
                 NavigationLink(destination: LegalDocumentView(kind: .terms)) {
-                    Text("Terms of Use")
-                        .font(.system(size: 12))
-                        .underline()
+                    Text("Terms of Use").underline()
                 }
             }
+            .font(.system(size: 12))
             .foregroundColor(.blue)
         }
         .padding(.vertical, 4)
