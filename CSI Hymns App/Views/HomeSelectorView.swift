@@ -73,7 +73,8 @@ public struct HomeSelectorView: View {
                                     Image("app_logo")
                                         .resizable()
                                         .scaledToFit()
-                                        .frame(width: 36, height: 36)
+                                        .frame(width: 62, height: 62)
+                                        .clipShape(Circle())
                                 }
                                 .padding(.bottom, 4)
                                 
@@ -185,7 +186,8 @@ public struct HomeSelectorView: View {
                                         Image("app_logo")
                                             .resizable()
                                             .scaledToFit()
-                                            .frame(width: 36, height: 36)
+                                            .frame(width: 62, height: 62)
+                                            .clipShape(Circle())
                                     }
                                     .padding(.bottom, 4)
                                     

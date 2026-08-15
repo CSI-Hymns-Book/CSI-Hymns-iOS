@@ -42,6 +42,7 @@ public final class PostHogService: Sendable {
     
     /// Identifies the user in PostHog by linking their anonymous ID with their Supabase UUID.
     public func identify(userId: String) {
+        guard UserDefaults.standard.bool(forKey: ConsentStorageKeys.analytics) else { return }
         let key = "csi_analytics_distinct_id"
         let anonId = UserDefaults.standard.string(forKey: key) ?? UUID().uuidString
         UserDefaults.standard.set(anonId, forKey: key)
@@ -62,6 +63,7 @@ public final class PostHogService: Sendable {
     
     /// Tracks an event with custom properties.
     public func track(event: String, properties: [String: Any] = [:]) {
+        guard UserDefaults.standard.bool(forKey: ConsentStorageKeys.analytics) else { return }
         guard let apiKey = apiKey, !apiKey.isEmpty else {
             print("PostHogService: API key missing, ignoring event: \(event)")
             return

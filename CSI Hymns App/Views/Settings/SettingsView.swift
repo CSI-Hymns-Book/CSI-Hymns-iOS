@@ -12,7 +12,6 @@ public struct SettingsView: View {
     @State private var isShowingClearCacheAlert = false
     @State private var isShowingClearHistoryAlert = false
     @State private var isClearing = false
-    @State private var privacyAccepted = true
     @State private var updateInfo: AppStoreUpdateService.UpdateInfo?
     @State private var showUpToDateAlert = false
     
@@ -43,7 +42,7 @@ public struct SettingsView: View {
                     profileCard
                     if supabase.isAuthenticated {
                         NavigationLink(destination: ProfileEditView()) {
-                            settingsRowLabel(title: "Edit Profile", subtitle: "Change display name or delete account", iconName: "person.crop.circle")
+                            settingsRowLabel(title: "Profile", subtitle: "Name, download your information, deactivate account", iconName: "person.crop.circle")
                         }
                     }
                 }
@@ -112,19 +111,18 @@ public struct SettingsView: View {
                     .listRowBackground(theme.cardBackground)
                 }
                 
-                if supabase.isAuthenticated {
-                    Section(header: Text("Privacy").foregroundColor(theme.textSecondary)) {
-                        Toggle(isOn: $privacyAccepted) {
-                            settingsRowLabel(title: "Privacy Policy Accepted", subtitle: "Sync consent to your profile", iconName: "hand.raised")
-                        }
-                        .tint(theme.accentColor)
-                        .onChange(of: privacyAccepted) { _, accepted in
-                            UserDefaults.standard.set(accepted ? 1 : 0, forKey: "csi_privacy_accepted_local")
-                            Task { await supabase.setPrivacyPolicyAcceptedInProfile(accepted) }
-                        }
+                Section(header: Text("Privacy").foregroundColor(theme.textSecondary)) {
+                    NavigationLink(destination: PrivacyCentreView()) {
+                        settingsRowLabel(title: "Privacy Centre", subtitle: "Policy, terms, consent, and your rights", iconName: "hand.raised")
                     }
-                    .listRowBackground(theme.cardBackground)
+                    NavigationLink(destination: LegalDocumentView(kind: .privacy)) {
+                        settingsRowLabel(title: "Privacy Policy", subtitle: "How we process personal data", iconName: "lock.shield")
+                    }
+                    NavigationLink(destination: LegalDocumentView(kind: .terms)) {
+                        settingsRowLabel(title: "Terms of Use", subtitle: "Licence and acceptable use", iconName: "doc.text")
+                    }
                 }
+                .listRowBackground(theme.cardBackground)
                 
                 // Support & Issue Logs
                 Section(header: Text("Support & Data").foregroundColor(theme.textSecondary)) {
@@ -162,10 +160,6 @@ public struct SettingsView: View {
                 
                 // Information (Android order: Privacy, Updates, About App, Changelog)
                 Section(header: Text("Information").foregroundColor(theme.textSecondary)) {
-                    NavigationLink(destination: PrivacyPolicyView()) {
-                        settingsRowLabel(title: "Privacy Policy", subtitle: "View full policy in-app", iconName: "doc.text")
-                    }
-                    
                     Button {
                         Task {
                             updateInfo = await AppStoreUpdateService.checkForUpdate()
@@ -208,7 +202,7 @@ public struct SettingsView: View {
                                     ProgressView()
                                         .tint(.red)
                                 } else {
-                                    Text("Delete Account")
+                                    Text("Deactivate Account")
                                         .font(.system(size: 15, weight: .bold))
                                 }
                                 Spacer()
@@ -245,15 +239,15 @@ public struct SettingsView: View {
         }
         .csiGlassNavigationBar(theme: theme)
         .toolbar(.hidden, for: .tabBar) // Hide Bottom Tabbar
-        .alert("Delete Account?", isPresented: $isShowingDeleteAlert) {
+        .alert("Deactivate Account?", isPresented: $isShowingDeleteAlert) {
             Button("Cancel", role: .cancel) {}
-            Button("Delete Everything", role: .destructive) {
+            Button("Deactivate", role: .destructive) {
                 Task {
                     await deleteAccountCascade()
                 }
             }
         } message: {
-            Text("This action cannot be undone. All your custom category lists, bookmarks, and account profiles will be wiped off Supabase servers instantly.")
+            Text("You will be signed out and the account will be marked as deactivated. Your record is kept internally and is not permanently erased.")
         }
         .alert("Clear Caches?", isPresented: $isShowingClearCacheAlert) {
             Button("Cancel", role: .cancel) {}
@@ -297,7 +291,6 @@ public struct SettingsView: View {
             Text("You're on the latest App Store version.")
         }
         .onAppear {
-            privacyAccepted = supabase.currentUser?.privacyPolicyAccepted ?? (UserDefaults.standard.integer(forKey: "csi_privacy_accepted_local") == 1)
             midiInstrumentId = MidiInstruments.currentProgramId
             refreshAdminEntry()
         }

@@ -289,17 +289,32 @@ public actor JiraService {
                 let statusId = status["id"] as? String
                 
                 #if canImport(Supabase)
-                let client = await MainActor.run { SupabaseService.instance.client }
+                let (client, isAuthed, deviceId) = await MainActor.run {
+                    let svc = SupabaseService.instance
+                    return (svc.client, svc.isAuthenticated, TicketsService.shared.getDeviceId())
+                }
                 
                 struct StatusUpdate: Encodable {
                     let jira_status: String
                     let jira_status_id: String?
                 }
                 
-                try await client.from("jira_tickets")
-                    .update(StatusUpdate(jira_status: statusName, jira_status_id: statusId))
-                    .eq("ticket_key", value: ticketKey)
-                    .execute()
+                if isAuthed {
+                    try await client.from("jira_tickets")
+                        .update(StatusUpdate(jira_status: statusName, jira_status_id: statusId))
+                        .eq("ticket_key", value: ticketKey)
+                        .execute()
+                } else {
+                    try await client.rpc(
+                        "update_guest_ticket_status",
+                        params: [
+                            "p_device_id": deviceId,
+                            "p_ticket_key": ticketKey,
+                            "p_jira_status": statusName,
+                            "p_jira_status_id": statusId ?? ""
+                        ]
+                    ).execute()
+                }
                 #endif
             }
         } catch {
@@ -373,7 +388,10 @@ public actor JiraService {
                let comments = json["comments"] as? [[String: Any]] {
                 
                 #if canImport(Supabase)
-                let client = await MainActor.run { SupabaseService.instance.client }
+                let (client, isAuthed, deviceId) = await MainActor.run {
+                    let svc = SupabaseService.instance
+                    return (svc.client, svc.isAuthenticated, TicketsService.shared.getDeviceId())
+                }
                 
                 for comment in comments {
                     guard let bodyObj = comment["body"] as? [String: Any] else { continue }
@@ -384,14 +402,27 @@ public actor JiraService {
                         continue
                     }
                     
-                    // Check if it already exists
-                    let existing: [TicketMessage] = try await client.from("ticket_messages")
-                        .select()
-                        .eq("ticket_key", value: ticketKey)
-                        .eq("sender", value: "admin")
-                        .eq("message", value: text)
+                    let existing: [TicketMessage]
+                    if isAuthed {
+                        existing = try await client.from("ticket_messages")
+                            .select()
+                            .eq("ticket_key", value: ticketKey)
+                            .eq("sender", value: "admin")
+                            .eq("message", value: text)
+                            .execute()
+                            .value
+                    } else {
+                        let all: [TicketMessage] = try await client.rpc(
+                            "get_guest_ticket_messages",
+                            params: [
+                                "p_device_id": deviceId,
+                                "p_ticket_key": ticketKey
+                            ]
+                        )
                         .execute()
                         .value
+                        existing = all.filter { $0.sender == "admin" && $0.message == text }
+                    }
                     
                     if existing.isEmpty {
                         struct InsertMessage: Encodable {

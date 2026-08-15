@@ -839,40 +839,23 @@ public struct HymnDetailView: View {
     }
     
     private func glassmorphicAudioPlayer(isEmbedded: Bool) -> some View {
-        let player = VStack(spacing: 10) {
+        let player = VStack(spacing: 12) {
             playerTopBar(title: hymn.title)
-            
-            HStack(spacing: 10) {
-                Text(formatTime(dragTime ?? audio.currentTime))
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundColor(theme.textSecondary)
-                    .frame(width: 40, alignment: .leading)
-                
-                Slider(
-                    value: Binding(
-                        get: { dragTime ?? audio.currentTime },
-                        set: { dragTime = $0 }
-                    ),
-                    in: 0...max(1, audio.duration),
-                    onEditingChanged: { editing in
-                        if !editing {
-                            if let targetTime = dragTime {
-                                audio.seek(to: targetTime)
-                            }
-                            dragTime = nil
+            playerSeekRow(
+                current: dragTime ?? audio.currentTime,
+                duration: audio.duration,
+                onEdit: { editing, value in
+                    if editing {
+                        dragTime = value
+                    } else {
+                        if let targetTime = dragTime {
+                            audio.seek(to: targetTime)
                         }
+                        dragTime = nil
                     }
-                )
-                .tint(theme.textPrimary)
-                
-                Text(formatTime(audio.duration))
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundColor(theme.textSecondary)
-                    .frame(width: 40, alignment: .trailing)
-            }
-            .padding(.horizontal, 4)
-            
-            HStack(spacing: 10) {
+                }
+            )
+            HStack {
                 playerSpeedControl(
                     rate: Double(audio.playbackRate),
                     minRate: 0.75,
@@ -880,24 +863,21 @@ public struct HymnDetailView: View {
                     step: 0.25,
                     onChange: { audio.playbackRate = Float($0) }
                 )
-                
                 Spacer(minLength: 0)
-                
-                playerTransportRow(
-                    isEmbedded: isEmbedded,
-                    isLooping: audio.isLooping,
-                    isLoading: audio.isLoading,
-                    isPlaying: audio.isPlaying,
-                    onLoop: { audio.isLooping.toggle() },
-                    onBack: { audio.skipBackward() },
-                    onPlayPause: { audio.togglePlayback() },
-                    onForward: { audio.skipForward() },
-                    trailing: { EmptyView() }
-                )
             }
+            playerTransportRow(
+                isLooping: audio.isLooping,
+                isLoading: audio.isLoading,
+                isPlaying: audio.isPlaying,
+                onLoop: { audio.isLooping.toggle() },
+                onBack: { audio.skipBackward() },
+                onPlayPause: { audio.togglePlayback() },
+                onForward: { audio.skipForward() }
+            )
         }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 14)
+        .padding(.top, 12)
+        .padding(.horizontal, 16)
+        .padding(.bottom, isEmbedded ? 12 : 20)
         .background(playerChrome(isEmbedded: isEmbedded))
         
         return Group {
@@ -910,7 +890,7 @@ public struct HymnDetailView: View {
     }
     
     private func glassmorphicMidiPlayer(isEmbedded: Bool) -> some View {
-        let player = VStack(spacing: 10) {
+        let player = VStack(spacing: 12) {
             if let audioErrorMessage {
                 HStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill")
@@ -1003,7 +983,9 @@ public struct HymnDetailView: View {
                     in: 0...max(1, midiAudio.duration),
                     onEditingChanged: { editing in
                         HapticsManager.shared.triggerSelection()
-                        if !editing {
+                        if editing {
+                            dragTime = dragTime ?? midiAudio.currentTime
+                        } else {
                             if let targetTime = dragTime {
                                 midiAudio.seek(to: targetTime)
                             }
@@ -1031,7 +1013,7 @@ public struct HymnDetailView: View {
                 
                 playerTransposeControl
                 
-                Spacer(minLength: 0)
+                Spacer(minLength: 4)
                 
                 Button {
                     isShowingAdvancedMidi = true
@@ -1039,16 +1021,16 @@ public struct HymnDetailView: View {
                     Image(systemName: "slider.horizontal.3")
                         .font(.system(size: 14, weight: .bold))
                         .foregroundColor(theme.textSecondary)
-                        .padding(8)
+                        .frame(width: 36, height: 36)
                         .background(theme.surfaceColor.opacity(0.85))
                         .clipShape(Circle())
                         .overlay(Circle().stroke(theme.strokeColor, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Advanced MIDI settings")
             }
             
             playerTransportRow(
-                isEmbedded: isEmbedded,
                 isLooping: midiAudio.isLooping,
                 isLoading: midiAudio.isLoading,
                 isPlaying: midiAudio.isPlaying,
@@ -1058,12 +1040,12 @@ public struct HymnDetailView: View {
                 },
                 onBack: { midiAudio.skipBackward() },
                 onPlayPause: { midiAudio.togglePlayback() },
-                onForward: { midiAudio.skipForward() },
-                trailing: { EmptyView() }
+                onForward: { midiAudio.skipForward() }
             )
         }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 14)
+        .padding(.top, 12)
+        .padding(.horizontal, 16)
+        .padding(.bottom, isEmbedded ? 12 : 20)
         .background(playerChrome(isEmbedded: isEmbedded))
         .sheet(isPresented: $isShowingAdvancedMidi) {
             AdvancedMidiSettingsView()
@@ -1190,36 +1172,71 @@ public struct HymnDetailView: View {
         .foregroundColor(theme.textPrimary)
     }
     
-    private func playerTransportRow<Trailing: View>(
-        isEmbedded: Bool,
+    private func playerSeekRow(
+        current: TimeInterval,
+        duration: TimeInterval,
+        onEdit: @escaping (_ editing: Bool, _ value: TimeInterval) -> Void
+    ) -> some View {
+        HStack(spacing: 10) {
+            Text(formatTime(current))
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundColor(theme.textSecondary)
+                .frame(width: 42, alignment: .leading)
+            
+            Slider(
+                value: Binding(
+                    get: { current },
+                    set: { onEdit(true, $0) }
+                ),
+                in: 0...max(1, duration),
+                onEditingChanged: { editing in
+                    onEdit(editing, current)
+                }
+            )
+            .tint(theme.textPrimary)
+            
+            Text(formatTime(duration))
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundColor(theme.textSecondary)
+                .frame(width: 42, alignment: .trailing)
+        }
+    }
+    
+    private func playerTransportRow(
         isLooping: Bool,
         isLoading: Bool,
         isPlaying: Bool,
         onLoop: @escaping () -> Void,
         onBack: @escaping () -> Void,
         onPlayPause: @escaping () -> Void,
-        onForward: @escaping () -> Void,
-        @ViewBuilder trailing: () -> Trailing
+        onForward: @escaping () -> Void
     ) -> some View {
-        HStack(spacing: isEmbedded ? 14 : 22) {
+        HStack(spacing: 0) {
             Button(action: onLoop) {
                 Image(systemName: isLooping ? "repeat.1" : "repeat")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(isLooping ? .red : theme.textSecondary)
+                    .frame(width: 40, height: 40)
             }
+            .buttonStyle(.plain)
+            
+            Spacer(minLength: 8)
             
             Button(action: onBack) {
                 Image(systemName: "gobackward.5")
-                    .font(.system(size: 20))
+                    .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
+                    .frame(width: 44, height: 44)
             }
+            .buttonStyle(.plain)
+            
+            Spacer(minLength: 8)
             
             Button(action: onPlayPause) {
                 ZStack {
                     Circle()
                         .fill(theme.textPrimary)
-                        .frame(width: 50, height: 50)
-                    
+                        .frame(width: 52, height: 52)
                     if isLoading {
                         ProgressView()
                             .tint(theme.backgroundColor)
@@ -1231,14 +1248,22 @@ public struct HymnDetailView: View {
                     }
                 }
             }
+            .buttonStyle(.plain)
+            
+            Spacer(minLength: 8)
             
             Button(action: onForward) {
                 Image(systemName: "goforward.5")
-                    .font(.system(size: 20))
+                    .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
+                    .frame(width: 44, height: 44)
             }
+            .buttonStyle(.plain)
             
-            trailing()
+            Spacer(minLength: 8)
+            
+            Color.clear
+                .frame(width: 40, height: 40)
         }
         .frame(maxWidth: .infinity)
     }

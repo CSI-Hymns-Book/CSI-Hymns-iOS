@@ -97,7 +97,7 @@ public struct AboutAppView: View {
                     
                     HStack(spacing: 8) {
                         linkChip(title: "Telegram", url: "https://t.me/Reynold29")
-                        NavigationLink(destination: PrivacyPolicyView()) {
+                        NavigationLink(destination: LegalDocumentView(kind: .privacy)) {
                             Text("Privacy Policy")
                                 .font(.system(size: 13, weight: .bold))
                                 .foregroundColor(theme.accentColor)

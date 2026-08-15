@@ -1,4 +1,5 @@
 import SwiftUI
+import Observation
 
 #if canImport(OneSignalFramework)
 import OneSignalFramework
@@ -11,9 +12,9 @@ struct CSIHymnsApp: App {
     @State private var christmasMode = ChristmasModeService.shared
     @State private var themeManager = ThemeManager.shared
     @State private var isShowingWelcome = false
-    @State private var isShowingOnboarding = false
     @State private var forceUpdate: ForceUpdateDecision? = nil
     @State private var hasRequestedPushPermission = false
+    @Bindable private var consent = ConsentManager.shared
     
     // Core release info parsed dynamically from changelog.json
     private var activeRelease: ChangelogRelease {
@@ -74,14 +75,29 @@ struct CSIHymnsApp: App {
                                 UserDefaults.standard.set(activeRelease.version, forKey: "last_seen_changelog_version")
                             }
                         }
-                        .sheet(isPresented: $isShowingOnboarding, onDismiss: {
-                            checkChangelogLaunch()
-                        }) {
+                        .fullScreenCover(isPresented: Binding(
+                            get: { !consent.hasValidRequiredConsent || !consent.hasCompletedTour },
+                            set: { _ in }
+                        )) {
                             OnboardingView()
                         }
                         .onAppear {
-                            checkOnboardingOrChangelog()
-                            requestPushPermissionIfNeeded()
+                            if consent.hasValidRequiredConsent && consent.hasCompletedTour {
+                                checkChangelogLaunch()
+                                requestPushPermissionIfNeeded()
+                            }
+                        }
+                        .onChange(of: consent.hasValidRequiredConsent) { _, accepted in
+                            if accepted && consent.hasCompletedTour {
+                                checkChangelogLaunch()
+                                requestPushPermissionIfNeeded()
+                            }
+                        }
+                        .onChange(of: consent.hasCompletedTour) { _, done in
+                            if done && consent.hasValidRequiredConsent {
+                                checkChangelogLaunch()
+                                requestPushPermissionIfNeeded()
+                            }
                         }
                 }
             }
@@ -99,16 +115,6 @@ struct CSIHymnsApp: App {
                     BackgroundSyncService.shared.performBackgroundSync()
                 }
             }
-        }
-    }
-    
-    private func checkOnboardingOrChangelog() {
-        // Check onboarding first
-        let hasSeenOnboarding = UserDefaults.standard.bool(forKey: "csi_has_seen_onboarding_v1")
-        if !hasSeenOnboarding {
-            isShowingOnboarding = true
-        } else {
-            checkChangelogLaunch()
         }
     }
     
@@ -142,6 +148,7 @@ struct CSIHymnsApp: App {
     private func requestPushPermissionIfNeeded() {
         guard !hasRequestedPushPermission else { return }
         hasRequestedPushPermission = true
+        AppDelegate.startOneSignalIfNeeded()
         
         #if canImport(OneSignalFramework)
         OneSignal.Notifications.requestPermission({ accepted in

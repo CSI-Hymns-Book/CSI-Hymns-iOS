@@ -2,6 +2,7 @@ import SwiftUI
 import Observation
 
 /// Auth view-model driver managing inputs, form validation, and Supabase integration.
+@MainActor
 @Observable
 public final class AuthViewModel {
     public var email = ""
@@ -9,6 +10,7 @@ public final class AuthViewModel {
     public var fullName = ""
     public var isSignUp = false
     public var acceptPrivacy = false
+    public var acceptTerms = false
     public var isLoading = false
     public var errorMessage: String? = nil
     public var resetEmailSent = false
@@ -21,6 +23,8 @@ public final class AuthViewModel {
         if isSignUp {
             guard !fullName.isEmpty else { return false }
             guard acceptPrivacy else { return false }
+        } else {
+            guard ConsentManager.shared.hasValidRequiredConsent else { return false }
         }
         return true
     }
@@ -38,7 +42,7 @@ public final class AuthViewModel {
             } else {
                 try await svc.signIn(email: email, password: password)
             }
-            await svc.syncPrivacyPolicyFromLocalPrefs()
+            await svc.syncConsentFromLocalPrefs()
             isLoading = false
             return true
         } catch {
@@ -184,7 +188,7 @@ public struct AuthView: View {
                 systemImage: "lock"
             )
             
-            // Privacy Agreement Checkbox (Sign Up Only)
+            // Privacy + Terms (Sign Up — account data is additional processing)
             if viewModel.isSignUp {
                 privacyAgreementRow
             }
@@ -199,7 +203,7 @@ public struct AuthView: View {
                         Task {
                             await FavoritesManager.shared.syncWithRemote()
                             await CustomCategoriesViewModel.syncAfterSignIn()
-                            await SupabaseService.instance.syncPrivacyPolicyFromLocalPrefs()
+                            await ConsentManager.shared.syncToProfile()
                             await ChristmasCarolsService.shared.syncAfterSignIn()
                         }
                         dismiss()
@@ -259,28 +263,32 @@ public struct AuthView: View {
     }
     
     private var privacyAgreementRow: some View {
-        HStack(alignment: .top, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             Button {
                 viewModel.acceptPrivacy.toggle()
+                viewModel.acceptTerms = viewModel.acceptPrivacy
             } label: {
-                Image(systemName: viewModel.acceptPrivacy ? "checkmark.square.fill" : "square")
-                    .font(.system(size: 20))
-                    .foregroundColor(viewModel.acceptPrivacy ? .white : .white.opacity(0.4))
-            }
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text("I accept the privacy policy")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.white)
-                
-                NavigationLink(destination: PrivacyPolicyView()) {
-                    Text("Read Privacy Policy")
-                        .font(.system(size: 12))
-                        .foregroundColor(.blue)
-                        .underline()
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: viewModel.acceptPrivacy ? "checkmark.square.fill" : "square")
+                        .font(.system(size: 22))
+                        .foregroundColor(viewModel.acceptPrivacy ? .white : .white.opacity(0.4))
+                    Text("I agree to the Privacy Policy and Terms of Use.")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.leading)
+                    Spacer()
                 }
             }
-            Spacer()
+            HStack(spacing: 16) {
+                NavigationLink(destination: LegalDocumentView(kind: .privacy)) {
+                    Text("Privacy Policy").underline()
+                }
+                NavigationLink(destination: LegalDocumentView(kind: .terms)) {
+                    Text("Terms of Use").underline()
+                }
+            }
+            .font(.system(size: 12))
+            .foregroundColor(.blue)
         }
         .padding(.vertical, 4)
     }
@@ -310,7 +318,7 @@ public struct AuthView: View {
                         try await SupabaseService.instance.signInWithAppleNative()
                         await FavoritesManager.shared.syncWithRemote()
                         await CustomCategoriesViewModel.syncAfterSignIn()
-                        await SupabaseService.instance.syncPrivacyPolicyFromLocalPrefs()
+                        await ConsentManager.shared.syncToProfile()
                         await ChristmasCarolsService.shared.syncAfterSignIn()
                         await SupabaseService.instance.refreshDisplayName()
                         viewModel.isLoading = false
@@ -353,7 +361,7 @@ public struct AuthView: View {
                         try await SupabaseService.instance.signInWithProvider("google")
                         await FavoritesManager.shared.syncWithRemote()
                         await CustomCategoriesViewModel.syncAfterSignIn()
-                        await SupabaseService.instance.syncPrivacyPolicyFromLocalPrefs()
+                        await ConsentManager.shared.syncToProfile()
                         await ChristmasCarolsService.shared.syncAfterSignIn()
                         await SupabaseService.instance.refreshDisplayName()
                         viewModel.isLoading = false
