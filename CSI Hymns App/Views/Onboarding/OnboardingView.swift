@@ -163,8 +163,11 @@ public struct OnboardingView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
             
-            Link("Read Privacy Policy", destination: URL(string: "https://sites.google.com/view/csi-hymns-privacy-policy/home")!)
-                .font(.system(size: 14, weight: .semibold))
+            NavigationLink(destination: PrivacyPolicyView()) {
+                Text("Read Privacy Policy")
+                    .font(.system(size: 14, weight: .semibold))
+                    .underline()
+            }
             
             Button {
                 privacyAccepted.toggle()

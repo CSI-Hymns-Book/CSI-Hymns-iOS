@@ -6,9 +6,11 @@ import MessageUI
 @Observable
 public final class OrderOfServiceReaderViewModel {
     public var pages: [OrderPage] = []
+    public var indexEntries: [OrderIndexEntry] = []
     public var currentPageIndex = 0
     public var isLoading = true
     public var errorMessage: String? = nil
+    public var jumpUnavailableMessage: String? = nil
     
     private let type: String
     
@@ -20,17 +22,13 @@ public final class OrderOfServiceReaderViewModel {
     /// Neighboring page numbers around the current page (similar to legacy page chips window).
     public var visiblePageNumbers: [Int] {
         guard !pages.isEmpty else { return [] }
-        let currentNo = pages[currentPageIndex].pageNo
-        let range = 3 // Look 3 pages back and 3 pages forward
-        
+        let range = 3
         let start = max(0, currentPageIndex - range)
         let end = min(pages.count - 1, currentPageIndex + range)
-        
         return (start...end).map { pages[$0].pageNo }
     }
     
     /// Groups pages by their active sections (when a page defines a title).
-    /// Mirroring legacy Flutter's sequential ordered category block index exactly.
     public var groupedSections: [(title: String, pages: [OrderPage])] {
         var sections: [(title: String, pages: [OrderPage])] = []
         var activeSectionTitle = ""
@@ -51,12 +49,25 @@ public final class OrderOfServiceReaderViewModel {
         return sections
     }
     
-    public func jumpToPageNo(_ pageNo: Int) {
+    public var pageNoToIndex: [Int: Int] {
+        Dictionary(uniqueKeysWithValues: pages.enumerated().map { ($0.element.pageNo, $0.offset) })
+    }
+    
+    @discardableResult
+    public func jumpToPageNo(_ pageNo: Int, fromIndex: Bool = false) -> Bool {
         if let idx = pages.firstIndex(where: { $0.pageNo == pageNo }) {
             currentPageIndex = idx
+            jumpUnavailableMessage = nil
             let generator = UIImpactFeedbackGenerator(style: .light)
             generator.impactOccurred()
+            return true
         }
+        if fromIndex {
+            jumpUnavailableMessage = "Page not available yet"
+            let generator = UINotificationFeedbackGenerator()
+            generator.notificationOccurred(.warning)
+        }
+        return false
     }
     
     public func reload() {
@@ -64,81 +75,31 @@ public final class OrderOfServiceReaderViewModel {
     }
     
     private func loadLiturgyPages() {
-        self.isLoading = true
-        
-        // 1. Attempt loading from Flutter-aligned cached UserDefaults JSON
-        if let cachedData = UserDefaults.standard.data(forKey: "orderOfServiceData") {
-            do {
-                let parsed = try OrderPage.parsePages(from: cachedData)
-                let filtered = parsed.filter { $0.type == self.type }
-                if !filtered.isEmpty {
-                    self.pages = filtered
-                    self.isLoading = false
-                    print("[OrderOfServiceReader] Loaded \(filtered.count) pages from 'orderOfServiceData' cache.")
-                    return
-                }
-            } catch {
-                print("[OrderOfServiceReader] Error parsing 'orderOfServiceData' cache: \(error)")
-            }
+        isLoading = true
+        let loaded = OrderOfServiceStore.loadPages(type: type)
+        if !loaded.pages.isEmpty {
+            pages = loaded.pages
+            indexEntries = loaded.index
+            isLoading = false
+            errorMessage = nil
+            return
         }
         
-        // 2. Backwards compatibility: Attempt loading from legacy csi_cached_liturgies_json
-        if let cachedData = UserDefaults.standard.data(forKey: "csi_cached_liturgies_json") {
-            do {
-                let parsed = try OrderPage.parsePages(from: cachedData)
-                let filtered = parsed.filter { $0.type == self.type }
-                if !filtered.isEmpty {
-                    self.pages = filtered
-                    self.isLoading = false
-                    print("[OrderOfServiceReader] Loaded \(filtered.count) pages from legacy 'csi_cached_liturgies_json' cache.")
-                    return
-                }
-            } catch {
-                print("[OrderOfServiceReader] Error parsing legacy cache: \(error)")
-            }
-        }
-        
-        // 3. Fallback: Load from compiled offline seed string
-        if let seedData = LiturgyOfflineSeeds.fallbackJSON.data(using: .utf8) {
-            do {
-                let parsed = try OrderPage.parsePages(from: seedData)
-                let filtered = parsed.filter { $0.type == self.type }
-                if !filtered.isEmpty {
-                    self.pages = filtered
-                    self.isLoading = false
-                    print("[OrderOfServiceReader] Loaded \(filtered.count) pages from offline seeds.")
-                    return
-                }
-            } catch {
-                print("[OrderOfServiceReader] Error parsing offline seeds: \(error)")
-            }
-        }
-        
-        // 4. Last fallback: Seed hardcoded mock items if everything else fails
         loadBundledMockLiturgies()
+        indexEntries = []
+        errorMessage = pages.isEmpty ? "No liturgy pages available." : nil
     }
     
     private func loadBundledMockLiturgies() {
-        // Seeds comprehensive liturgies for regular and festival types
         let mockRegular = [
             OrderPage(pageNo: 1, title: "Call to Worship / ದೇವಾರಾಧನೆಯ ಪ್ರಾರಂಭ", content: "L: The Lord is in His holy temple; let all the earth keep silence before Him.\n\nಸ: ಕರ್ತನು ತನ್ನ ಪವಿತ್ರ ಆಲಯದಲ್ಲಿದ್ದಾನೆ; ಭೂಲೋಕವೆಲ್ಲಾ ಆತನ ಸನ್ನಿಧಿಯಲ್ಲಿ ಮೌನವಾಗಿರಲಿ.", type: "regular"),
-            OrderPage(pageNo: 2, title: "Confession / ಪಾಪ ಒಪ್ಪಿಗೆ", content: "L: Let us confess our sins to Almighty God.\n\nಸ: ಸರ್ವಶಕ್ತನಾದ ದೇವರಿಗೆ ನಮ್ಮ ಪಾಪಗಳನ್ನು ಅರಿಕೆ ಮಾಡಿಕೊಳ್ಳೋಣ.", type: "regular"),
-            OrderPage(pageNo: 3, title: "Absolution / ಪಾಪ ಪರಿಹಾರ ಘೋಷಣೆ", content: "L: May the Almighty God grant you pardon and remission of all your sins.\n\nಸ: ಸರ್ವಶಕ್ತನಾದ ದೇವರು ನಿಮಗೆ ಕ್ಷಮಾಪಣೆಯನ್ನೂ ನಿಮ್ಮ ಪಾಪಗಳ ನಿವಾರಣೆಯನ್ನೂ ಅನುಗ್ರಹಿಸಲಿ.", type: "regular"),
-            OrderPage(pageNo: 4, title: "Thanksgiving / ಕೃತಜ್ಞತಾ ಸ್ತುತಿ", content: "L: O give thanks unto the Lord, for He is good.\n\nಸ: ಕರ್ತನಿಗೆ ಕೃತಜ್ಞತಾಸ್ತುತಿ ಮಾಡಿರಿ, ಆತನು ಒಳ್ಳೆಯವನು; ಆತನ ಕೃಪೆಯು ಎಂದೆಂದಿಗೂ ಇರುತ್ತದೆ.", type: "regular")
+            OrderPage(pageNo: 2, title: "Confession / ಪಾಪ ಒಪ್ಪಿಗೆ", content: "L: Let us confess our sins to Almighty God.\n\nಸ: ಸರ್ವಶಕ್ತನಾದ ದೇವರಿಗೆ ನಮ್ಮ ಪಾಪಗಳನ್ನು ಅರಿಕೆ ಮಾಡಿಕೊಳ್ಳೋಣ.", type: "regular")
         ]
-        
         let mockFestival = [
-            OrderPage(pageNo: 1, title: "Festival Opening / ಹಬ್ಬದ ಆರಾಧನೆಯ ಆರಂಭ", content: "L: Rejoice in the Lord always, for today is a day of joy!\n\nಸ: ಕರ್ತನಲ್ಲಿ ಯಾವಾಗಲೂ ಆನಂದಪಡಿರಿ, ಇಂದು ಸಂತೋಷದ ದಿನವಾಗಿದೆ!", type: "festival"),
-            OrderPage(pageNo: 2, title: "Festive Praise / ಹಬ್ಬದ ಕೀರ್ತನೆ", content: "L: Praise Him with the sound of the trumpet!\n\nಸ: ತುತೂರಿ ಧ್ವನಿಯಿಂದ ಆತನನ್ನು ಸ್ತುತಿಸಿರಿ; ವೀಣೆ ರಾಗಗಳೊಡನೆ ಆತನನ್ನು ಕೊಂಡಾಡಿರಿ.", type: "festival")
+            OrderPage(pageNo: 1, title: "Festival Opening / ಹಬ್ಬದ ಆರಾಧನೆಯ ಆರಂಭ", content: "L: Rejoice in the Lord always, for today is a day of joy!\n\nಸ: ಕರ್ತನಲ್ಲಿ ಯಾವಾಗಲೂ ಆನಂದಪಡಿರಿ, ಇಂದು ಸಂತೋಷದ ದಿನವಾಗಿದೆ!", type: "festival")
         ]
-        
-        if self.type == "regular" {
-            self.pages = mockRegular
-        } else {
-            self.pages = mockFestival
-        }
-        
-        self.isLoading = false
+        pages = type == "regular" ? mockRegular : mockFestival
+        isLoading = false
     }
 }
 
@@ -216,7 +177,7 @@ public struct OrderOfServiceReaderView: View {
         .toolbar(.hidden, for: .tabBar)
         .sheet(isPresented: $isShowingIndexSheet) { allPagesSheet }
         .sheet(isPresented: $isShowingReportSheet) { reportIssueSheet }
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("csi_liturgies_refreshed"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: OrderOfServiceStore.refreshedNotification)) { _ in
             viewModel.reload()
         }
     }
@@ -293,6 +254,59 @@ public struct OrderOfServiceReaderView: View {
                 .padding(.horizontal, isLandscape ? 60 : 24)
                 .padding(.top, 4)
                 
+                if !viewModel.indexEntries.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("ಪರಿವಿಡಿ")
+                            .font(.system(size: 20, weight: .black))
+                            .foregroundColor(.white)
+                        Text("Tap a page number to open that section")
+                            .font(.system(size: 12))
+                            .foregroundColor(.white.opacity(0.65))
+                        
+                        ForEach(viewModel.indexEntries) { entry in
+                            let available = viewModel.pageNoToIndex[entry.pageNo] != nil
+                            Button {
+                                if viewModel.jumpToPageNo(entry.pageNo, fromIndex: true) {
+                                    withAnimation { hasSelectedPage = true }
+                                }
+                            } label: {
+                                HStack(alignment: .top, spacing: 12) {
+                                    Text("\(entry.pageNo)")
+                                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                                        .foregroundColor(available ? .black : .white.opacity(0.45))
+                                        .frame(width: 44, height: 36)
+                                        .background(available ? Color.white : Color.white.opacity(0.08))
+                                        .cornerRadius(10)
+                                    
+                                    Text(entry.title)
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(available ? .white : .white.opacity(0.45))
+                                        .multilineTextAlignment(.leading)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .padding(12)
+                                .background(Color.white.opacity(0.06))
+                                .cornerRadius(14)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(!available)
+                        }
+                    }
+                    .padding(.horizontal, isLandscape ? 60 : 24)
+                    .padding(.top, 16)
+                }
+                
+                if let msg = viewModel.jumpUnavailableMessage {
+                    Text(msg)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.orange)
+                        .padding(.top, 4)
+                }
+                
                 Spacer(minLength: isLandscape ? 10 : 20)
             }
             .frame(maxWidth: isLandscape ? 640 : .infinity)
@@ -303,8 +317,7 @@ public struct OrderOfServiceReaderView: View {
     
     private func submitJump() {
         guard let target = Int(jumpPageText.trimmingCharacters(in: .whitespacesAndNewlines)) else { return }
-        viewModel.jumpToPageNo(target)
-        if viewModel.pages.contains(where: { $0.pageNo == target }) {
+        if viewModel.jumpToPageNo(target) {
             withAnimation { hasSelectedPage = true }
         }
     }
@@ -526,6 +539,47 @@ public struct OrderOfServiceReaderView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    if !viewModel.indexEntries.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("ಪರಿವಿಡಿ")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(.white)
+                            
+                            ForEach(viewModel.indexEntries) { entry in
+                                let available = viewModel.pageNoToIndex[entry.pageNo] != nil
+                                Button {
+                                    if viewModel.jumpToPageNo(entry.pageNo, fromIndex: true) {
+                                        isShowingIndexSheet = false
+                                        withAnimation { hasSelectedPage = true }
+                                    }
+                                } label: {
+                                    HStack(alignment: .top, spacing: 12) {
+                                        Text("\(entry.pageNo)")
+                                            .font(.system(size: 13, weight: .bold))
+                                            .foregroundColor(available ? .black : .white.opacity(0.4))
+                                            .frame(width: 40, height: 32)
+                                            .background(available ? Color.white : Color.white.opacity(0.08))
+                                            .cornerRadius(8)
+                                        Text(entry.title)
+                                            .font(.system(size: 13, weight: .semibold))
+                                            .foregroundColor(available ? .white : .white.opacity(0.4))
+                                            .multilineTextAlignment(.leading)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                    .padding(10)
+                                    .background(Color.white.opacity(0.05))
+                                    .cornerRadius(12)
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(!available)
+                            }
+                        }
+                    }
+                    
+                    Text("Available pages")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.white.opacity(0.85))
+                    
                     ForEach(viewModel.groupedSections, id: \.title) { section in
                         VStack(alignment: .leading, spacing: 8) {
                             if !section.title.isEmpty {
@@ -535,12 +589,11 @@ public struct OrderOfServiceReaderView: View {
                                     .padding(.horizontal, 4)
                             }
                             
-                            // Horizontal wrap for pages in this section
                             LazyVGrid(columns: [GridItem(.adaptive(minimum: 46))], spacing: 10) {
                                 ForEach(section.pages) { p in
                                     let isCurrent = viewModel.pages[viewModel.currentPageIndex].pageNo == p.pageNo
                                     Button {
-                                        viewModel.jumpToPageNo(p.pageNo)
+                                        _ = viewModel.jumpToPageNo(p.pageNo)
                                         isShowingIndexSheet = false
                                         withAnimation { hasSelectedPage = true }
                                     } label: {

@@ -9,6 +9,7 @@ public struct AdminControlsView: View {
     @State private var theme = ThemeManager.shared
     @State private var isAuthorized: Bool? = nil
     @State private var isLoadingAccess = true
+    @State private var allowedRoles: Set<AdminPrefs.AdminRole> = []
     
     public init() {}
     
@@ -43,38 +44,81 @@ public struct AdminControlsView: View {
     private var adminMenuView: some View {
         ScrollView {
             VStack(spacing: 20) {
-                NavigationLink(destination: AdminLyricCorrectionView()) {
-                    menuCard(
-                        title: "Lyric Correction",
-                        subtitle: "Directly modify stanzas, bilingual texts, and signatures.",
-                        systemImage: "pencil.and.outline",
-                        color: Color.blue
-                    )
+                if canAccess(.lyrics) {
+                    NavigationLink(destination: AdminLyricCorrectionView()) {
+                        menuCard(
+                            title: "Lyric Correction",
+                            subtitle: "Directly modify stanzas, bilingual texts, and signatures.",
+                            systemImage: "pencil.and.outline",
+                            color: Color.blue
+                        )
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
-                .buttonStyle(PlainButtonStyle())
                 
-                NavigationLink(destination: AdminAnnouncementsView()) {
-                    menuCard(
-                        title: "Announcements Manager",
-                        subtitle: "Trigger, modify, or archive dynamic in-app announcements.",
-                        systemImage: "megaphone.fill",
-                        color: Color.orange
-                    )
+                if canAccess(.prManager) {
+                    NavigationLink(destination: AdminAnnouncementsView()) {
+                        menuCard(
+                            title: "Announcements Manager",
+                            subtitle: "Trigger, modify, or archive dynamic in-app announcements.",
+                            systemImage: "megaphone.fill",
+                            color: Color.orange
+                        )
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
-                .buttonStyle(PlainButtonStyle())
                 
-                NavigationLink(destination: AdminConfigManagerView()) {
-                    menuCard(
-                        title: "App Configuration",
-                        subtitle: "Configure global features, force updates, and system flags.",
-                        systemImage: "gearshape.fill",
-                        color: Color.green
-                    )
+                if canAccess(.appConfig) {
+                    NavigationLink(destination: AdminConfigManagerView()) {
+                        menuCard(
+                            title: "App Configuration",
+                            subtitle: "Configure global features, force updates, and system flags.",
+                            systemImage: "gearshape.fill",
+                            color: Color.green
+                        )
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
-                .buttonStyle(PlainButtonStyle())
+                
+                if !canAccess(.lyrics) && !canAccess(.prManager) && !canAccess(.appConfig) {
+                    VStack(spacing: 8) {
+                        Image(systemName: "person.badge.key")
+                            .font(.system(size: 36))
+                            .foregroundColor(theme.textSecondary)
+                        Text("No admin modules for your role")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(theme.textPrimary)
+                        Text("Your account may only have tune_meter_view. Ask a super admin to grant lyrics, pr_manager, or app_config.")
+                            .font(.system(size: 13))
+                            .foregroundColor(theme.textSecondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding()
+                }
+                
+                if AdminPrefs.isSudoAdminEnabled {
+                    Button(role: .destructive) {
+                        AdminPrefs.isSudoAdminEnabled = false
+                        isAuthorized = false
+                    } label: {
+                        Text("Exit Sudo Admin Mode")
+                            .font(.system(size: 14, weight: .bold))
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.red.opacity(0.12))
+                            .cornerRadius(12)
+                            .foregroundColor(.red)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
             }
             .padding()
         }
+    }
+    
+    private func canAccess(_ role: AdminPrefs.AdminRole) -> Bool {
+        if AdminPrefs.isSudoAdminEnabled { return true }
+        return allowedRoles.contains(.admin) || allowedRoles.contains(role)
     }
     
     private func menuCard(title: String, subtitle: String, systemImage: String, color: Color) -> some View {
@@ -133,43 +177,40 @@ public struct AdminControlsView: View {
     }
     
     private func checkAdminAccess() async {
-        guard let currentUserEmail = await MainActor.run(body: { SupabaseService.instance.currentUserEmail }) else {
-            isAuthorized = false
-            isLoadingAccess = false
-            return
-        }
+        await AppConfigService.shared.refresh()
+        let remoteEmails = AppConfigService.shared.config.adminEmails
+            ?? UserDefaults.standard.string(forKey: "admin_emails_cached")
+        let currentUserEmail = await MainActor.run { SupabaseService.instance.currentUserEmail }
         
-        let localAllowed = ChristmasCarolsService.adminEmails
-        if localAllowed.contains(currentUserEmail.lowercased()) {
+        if AdminPrefs.isSudoAdminEnabled {
+            allowedRoles = Set(AdminPrefs.AdminRole.allCases)
             isAuthorized = true
             isLoadingAccess = false
             return
         }
         
-        #if canImport(Supabase)
-        do {
-            let client = SupabaseService.instance.client
-            let rows: [AppConfigRow] = try await client.from("app_config")
-                .select("key, value")
-                .eq("key", value: "admin_emails")
-                .execute()
-                .value
-            
-            if let first = rows.first {
-                let emailsStr = first.value.stringValue
-                let emailsList = emailsStr.components(separatedBy: ",")
-                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
-                
-                if emailsList.contains(currentUserEmail.lowercased()) {
-                    isAuthorized = true
-                    isLoadingAccess = false
-                    return
-                }
-            }
-        } catch {
-            print("AdminControlsView: Error fetching admin emails: \(error)")
+        guard let currentUserEmail else {
+            isAuthorized = false
+            isLoadingAccess = false
+            return
         }
-        #endif
+        
+        let normalized = currentUserEmail.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let rolesMap = AdminPrefs.parseAdminRoles(remoteEmails)
+        if let roles = rolesMap[normalized], !roles.isEmpty {
+            allowedRoles = roles
+            isAuthorized = true
+            isLoadingAccess = false
+            return
+        }
+        
+        // Fallback only when remote map has no entry for this email.
+        if AdminPrefs.localFallbackEmails.contains(normalized) {
+            allowedRoles = [.admin]
+            isAuthorized = true
+            isLoadingAccess = false
+            return
+        }
         
         isAuthorized = false
         isLoadingAccess = false
@@ -485,18 +526,15 @@ struct AdminLyricCorrectionView: View {
         
         // 4. Fetch Order of Service (Liturgies)
         do {
-            let url = URL(string: "https://raw.githubusercontent.com/Reynold29/csi-hymns-vault/refs/heads/main/order-of-service_data.json")!
+            let url = OrderOfServiceStore.remoteURL
             let (data, _) = try await URLSession.shared.data(from: url)
-            self.liturgies = try OrderPage.parsePages(from: data)
+            let doc = try OrderOfServiceStore.parseDocument(from: data)
+            self.liturgies = doc.pages
+            UserDefaults.standard.set(doc.rawData, forKey: OrderOfServiceStore.cacheKey)
         } catch {
             print("Admin: Failed fetching remote liturgies, falling back to local: \(error)")
-            if let cachedData = UserDefaults.standard.data(forKey: "orderOfServiceData"),
-               let decoded = try? OrderPage.parsePages(from: cachedData) {
-                self.liturgies = decoded
-            } else if let bundleUrl = Bundle.main.url(forResource: "order-of-service_data", withExtension: "json"),
-                      let bundleData = try? Data(contentsOf: bundleUrl),
-                      let decoded = try? OrderPage.parsePages(from: bundleData) {
-                self.liturgies = decoded
+            if let doc = OrderOfServiceStore.loadDocument() {
+                self.liturgies = doc.pages
             }
         }
         
@@ -576,15 +614,8 @@ struct AdminLyricCorrectionView: View {
         let url = URL(string: jsonUrl)!
         let (data, _) = try await URLSession.shared.data(from: url)
         
-        var decoded = try OrderPage.parsePages(from: data)
-        
-        if let index = decoded.firstIndex(where: { $0.pageNo == updated.pageNo }) {
-            decoded[index] = updated
-        } else {
-            throw NSError(domain: "Admin", code: 404, userInfo: [NSLocalizedDescriptionKey: "Liturgy not found on repository"])
-        }
-        
-        let encodedData = try JSONEncoder().encode(decoded)
+        // Preserve grouped JSON + index TOC (do not flatten to a page array).
+        let encodedData = try OrderOfServiceStore.applyPageUpdate(updated, to: data)
         guard let jsonString = String(data: encodedData, encoding: .utf8) else {
             throw NSError(domain: "Admin", code: 500, userInfo: [NSLocalizedDescriptionKey: "Serialization failure"])
         }
@@ -615,9 +646,8 @@ struct AdminLyricCorrectionView: View {
             throw NSError(domain: "Admin", code: 500, userInfo: [NSLocalizedDescriptionKey: "GitHub Sync: \(pushError)"])
         }
         
-        // Persist cache locally in userdefaults (same key OrderOfServiceListView checks)
-        UserDefaults.standard.set(encodedData, forKey: "orderOfServiceData")
-        NotificationCenter.default.post(name: Notification.Name("csi_liturgies_refreshed"), object: nil)
+        UserDefaults.standard.set(encodedData, forKey: OrderOfServiceStore.cacheKey)
+        NotificationCenter.default.post(name: OrderOfServiceStore.refreshedNotification, object: nil)
     }
 }
 
@@ -1193,9 +1223,19 @@ struct AdminConfigManagerView: View {
     @State private var forceUpdateMinVersion = ""
     @State private var forceUpdateMinBuildNumber = "0"
     @State private var forceUpdateAndroidStoreUrl = ""
+    @State private var forceUpdateIosStoreUrl = ""
     @State private var forceUpdateMessage = ""
     @State private var adminEmails = ""
     @State private var githubToken = ""
+    @State private var githubMidiToken = ""
+    @State private var paymentsEnabled = false
+    @State private var isAdyenEnabled = false
+    @State private var isRazorpayEnabled = true
+    @State private var midiHymnsRanges = ""
+    @State private var midiKeerthanesRanges = ""
+    @State private var disableOggFallback = ""
+    @State private var audioBackupUrl = ""
+    @State private var masterRootPasscode = ""
     
     var body: some View {
         Form {
@@ -1218,18 +1258,39 @@ struct AdminConfigManagerView: View {
                 TextField("Google Cast Receiver URL", text: $castReceiverUrl)
             }
             
+            Section(header: Text("Payments")) {
+                Toggle("Payments Enabled", isOn: $paymentsEnabled)
+                Toggle("Razorpay Enabled", isOn: $isRazorpayEnabled)
+                Toggle("Adyen Enabled", isOn: $isAdyenEnabled)
+            }
+            
+            Section(header: Text("MIDI / Audio")) {
+                TextField("MIDI Hymns Ranges / Meters", text: $midiHymnsRanges, axis: .vertical)
+                TextField("MIDI Keerthanes Ranges", text: $midiKeerthanesRanges)
+                TextField("Disable OGG Fallback (hymns|keerthane|both)", text: $disableOggFallback)
+                TextField("Audio Backup URL", text: $audioBackupUrl)
+            }
+            
             Section(header: Text("Force Update Policies")) {
                 Toggle("Enforce Mandatory Updates", isOn: $forceUpdateEnabled)
                 TextField("Min Version Required (e.g. 5.1.0)", text: $forceUpdateMinVersion)
                 TextField("Min Build Number Required", text: $forceUpdateMinBuildNumber)
                     .keyboardType(.numberPad)
-                TextField("Store Download URL", text: $forceUpdateAndroidStoreUrl)
+                TextField("Android Store URL", text: $forceUpdateAndroidStoreUrl)
+                TextField("iOS Store URL", text: $forceUpdateIosStoreUrl)
                 TextField("Notice Banner Message", text: $forceUpdateMessage)
             }
             
             Section(header: Text("Administration")) {
-                TextField("Admin emails (comma-separated)", text: $adminEmails)
-                SecureField("GitHub Repo Write Token", text: $githubToken)
+                Text("JSON object: email → roles array. Roles: admin, lyrics, pr_manager, app_config, tune_meter_view. Saved as jsonb object.")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                TextField("Admin emails / roles JSON", text: $adminEmails, axis: .vertical)
+                    .font(.system(size: 12, design: .monospaced))
+                    .lineLimit(6...16)
+                SecureField("GitHub MIDI Token", text: $githubMidiToken)
+                SecureField("GitHub Repo Write Token (legacy)", text: $githubToken)
+                SecureField("Master Root Passcode", text: $masterRootPasscode)
             }
             
             Section {
@@ -1302,9 +1363,19 @@ struct AdminConfigManagerView: View {
         forceUpdateMinVersion = dict["force_update_min_version"] as? String ?? ""
         forceUpdateMinBuildNumber = String(dict["force_update_min_build_number"] as? Int ?? 0)
         forceUpdateAndroidStoreUrl = dict["force_update_android_store_url"] as? String ?? ""
+        forceUpdateIosStoreUrl = dict["force_update_ios_store_url"] as? String ?? ""
         forceUpdateMessage = dict["force_update_message"] as? String ?? ""
-        adminEmails = dict["admin_emails"] as? String ?? ""
+        adminEmails = AdminPrefs.prettifyAdminEmailsConfig(dict["admin_emails"] as? String)
         githubToken = dict["github_token"] as? String ?? ""
+        githubMidiToken = dict["github_midi_token"] as? String ?? githubToken
+        paymentsEnabled = dict["payments_enabled"] as? Bool ?? false
+        isAdyenEnabled = dict["is_adyen_enabled"] as? Bool ?? false
+        isRazorpayEnabled = dict["is_razorpay_enabled"] as? Bool ?? true
+        midiHymnsRanges = dict["midi_hymns_ranges"] as? String ?? ""
+        midiKeerthanesRanges = dict["midi_keerthanes_ranges"] as? String ?? ""
+        disableOggFallback = dict["disable_ogg_fallback"] as? String ?? ""
+        audioBackupUrl = dict["audio_backup_url"] as? String ?? ""
+        masterRootPasscode = dict["master_root_passcode"] as? String ?? ""
     }
     
     private func saveConfig() {
@@ -1321,9 +1392,19 @@ struct AdminConfigManagerView: View {
             "force_update_min_version": forceUpdateMinVersion,
             "force_update_min_build_number": Int(forceUpdateMinBuildNumber) ?? 0,
             "force_update_android_store_url": forceUpdateAndroidStoreUrl,
+            "force_update_ios_store_url": forceUpdateIosStoreUrl,
             "force_update_message": forceUpdateMessage,
             "admin_emails": adminEmails,
-            "github_token": githubToken
+            "github_token": githubToken,
+            "github_midi_token": githubMidiToken,
+            "payments_enabled": paymentsEnabled,
+            "is_adyen_enabled": isAdyenEnabled,
+            "is_razorpay_enabled": isRazorpayEnabled,
+            "midi_hymns_ranges": midiHymnsRanges,
+            "midi_keerthanes_ranges": midiKeerthanesRanges,
+            "disable_ogg_fallback": disableOggFallback,
+            "audio_backup_url": audioBackupUrl,
+            "master_root_passcode": masterRootPasscode
         ]
         
         Task {
@@ -1341,6 +1422,18 @@ struct AdminConfigManagerView: View {
                             valObj = .bool(b)
                         } else if let i = v as? Int {
                             valObj = .int(i)
+                        } else if k == "admin_emails",
+                                  let raw = v as? String {
+                            let normalized = AdminPrefs.normalizeAdminEmailsRaw(raw)
+                            if let parsed = AppConfigJSON.parse(normalized),
+                               case .object = parsed {
+                                valObj = .json(parsed)
+                            } else if let parsed = AppConfigJSON.parse(normalized),
+                                      case .array = parsed {
+                                valObj = .json(parsed)
+                            } else {
+                                valObj = .string(normalized)
+                            }
                         } else {
                             valObj = .string(v as? String ?? "")
                         }
@@ -1351,6 +1444,7 @@ struct AdminConfigManagerView: View {
                             .execute()
                     }
                     UserDefaults.standard.removeObject(forKey: "admin_local_config")
+                    await AppConfigService.shared.refresh()
                 } catch {
                     print("AdminConfigManagerView: Error saving remote config: \(error)")
                 }
@@ -1369,16 +1463,21 @@ enum ConfigVal: Encodable {
     case bool(Bool)
     case int(Int)
     case string(String)
+    case json(AppConfigJSON)
     
     func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
         switch self {
         case .bool(let b):
+            var container = encoder.singleValueContainer()
             try container.encode(b)
         case .int(let i):
+            var container = encoder.singleValueContainer()
             try container.encode(i)
         case .string(let s):
+            var container = encoder.singleValueContainer()
             try container.encode(s)
+        case .json(let json):
+            try json.encode(to: encoder)
         }
     }
 }

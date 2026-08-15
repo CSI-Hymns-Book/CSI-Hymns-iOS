@@ -64,10 +64,10 @@ struct CSIHymnsApp: App {
             Group {
                 if let decision = forceUpdate, decision.requiresUpdate {
                     ForceUpdateView(message: decision.message, storeURL: decision.iosStoreURL)
-                        .preferredColorScheme(themeManager.colorScheme)
+                        .preferredColorScheme(themeManager.preferredColorScheme)
                 } else {
                     RootTabView()
-                        .preferredColorScheme(themeManager.colorScheme)
+                        .preferredColorScheme(themeManager.preferredColorScheme)
                         .sheet(isPresented: $isShowingWelcome) {
                             WelcomeChangelogView(release: activeRelease) {
                                 isShowingWelcome = false
@@ -87,6 +87,8 @@ struct CSIHymnsApp: App {
             }
             .task {
                 await waitForSupabaseInitialization()
+                await AppConfigService.shared.refresh()
+                await MidiFileCatalog.shared.refresh()
                 forceUpdate = await ForceUpdateService.shared.getDecision()
                 await CastService.shared.initializeIfEnabled()
                 await PageFlipVisibilityService.shared.refresh()

@@ -6,6 +6,7 @@ public struct SettingsView: View {
     @State private var supabase = SupabaseService.instance
     @State private var christmas = ChristmasModeService.shared
     @State private var pageFlipVisibility = PageFlipVisibilityService.shared
+    @State private var appConfig = AppConfigService.shared
     @State private var isShowingDeleteAlert = false
     @State private var isDeletingAccount = false
     @State private var isShowingClearCacheAlert = false
@@ -18,9 +19,10 @@ public struct SettingsView: View {
     // Core Preferences saved reactively via AppStorage
     @AppStorage("use_page_swipe_physics") private var usePageSwipe = true
     @AppStorage("enable_haptic_feedback") private var enableHaptics = true
-    @AppStorage("midiInstrumentId") private var midiInstrumentId = 19
+    @AppStorage("midiInstrumentId") private var midiInstrumentId = MidiInstruments.defaultProgramId
     
     @State private var showAdminControls = false
+    @State private var showAdminEntry = false
     
     public init() {}
     
@@ -78,15 +80,37 @@ public struct SettingsView: View {
                     }
                     .tint(theme.accentColor)
                     
-                    Picker(selection: $midiInstrumentId, label: settingsRowLabel(title: "MIDI Instrument", subtitle: "Playback sound for .mid files", iconName: "pianokeys")) {
-                        Text("Pipe Organ").tag(19)
-                        Text("Acoustic Grand Piano").tag(1)
-                        Text("Reed Organ").tag(20)
-                        Text("Choir Aahs").tag(52)
+                    Picker(
+                        selection: $midiInstrumentId,
+                        label: settingsRowLabel(
+                            title: "MIDI Instrument",
+                            subtitle: MidiInstruments.name(for: midiInstrumentId),
+                            iconName: "pianokeys"
+                        )
+                    ) {
+                        ForEach(MidiInstruments.all, id: \.program) { item in
+                            Text(item.name).tag(item.program)
+                        }
                     }
                     .pickerStyle(.navigationLink)
+                    .onChange(of: midiInstrumentId) { _, newValue in
+                        MidiPlaybackEngine.shared.updateGlobalInstrument(to: newValue)
+                    }
                 }
                 .listRowBackground(theme.cardBackground)
+                
+                if appConfig.paymentsEnabled {
+                    Section(header: Text("Support").foregroundColor(theme.textSecondary)) {
+                        NavigationLink(destination: DonationView()) {
+                            settingsRowLabel(
+                                title: "Support the Project",
+                                subtitle: "Help cover server costs & keep CSI Hymns ad-free",
+                                iconName: "heart.fill"
+                            )
+                        }
+                    }
+                    .listRowBackground(theme.cardBackground)
+                }
                 
                 if supabase.isAuthenticated {
                     Section(header: Text("Privacy").foregroundColor(theme.textSecondary)) {
@@ -98,10 +122,6 @@ public struct SettingsView: View {
                             UserDefaults.standard.set(accepted ? 1 : 0, forKey: "csi_privacy_accepted_local")
                             Task { await supabase.setPrivacyPolicyAcceptedInProfile(accepted) }
                         }
-                        
-                        Link(destination: URL(string: "https://sites.google.com/view/csi-hymns-privacy-policy/home")!) {
-                            settingsRowLabel(title: "Privacy Policy", subtitle: "View full policy online", iconName: "doc.text")
-                        }
                     }
                     .listRowBackground(theme.cardBackground)
                 }
@@ -112,7 +132,7 @@ public struct SettingsView: View {
                         settingsRowLabel(title: "Reported Issues Log", subtitle: "Track lyric corrections status", iconName: "exclamationmark.bubble")
                     }
                     
-                    if ChristmasCarolsService.shared.isAdmin {
+                    if showAdminEntry {
                         NavigationLink(destination: AdminControlsView()) {
                             settingsRowLabel(title: "Admin Controls Panel", subtitle: "Lyrics, announcements, and configuration", iconName: "lock.shield")
                         }
@@ -140,14 +160,10 @@ public struct SettingsView: View {
                 }
                 .listRowBackground(theme.cardBackground)
                 
-                // About & Promos
-                Section(header: Text("About").foregroundColor(theme.textSecondary)) {
-                    NavigationLink(destination: AboutDeveloperView()) {
-                        settingsRowLabel(title: "About Developer", subtitle: "Credits, mission, and privacy links", iconName: "person.crop.circle")
-                    }
-                    
-                    NavigationLink(destination: PraiseAppPromoView()) {
-                        settingsRowLabel(title: "Worship Companion +", subtitle: "Download our praise & worship lyrics app", iconName: "sparkles")
+                // Information (Android order: Privacy, Updates, About App, Changelog)
+                Section(header: Text("Information").foregroundColor(theme.textSecondary)) {
+                    NavigationLink(destination: PrivacyPolicyView()) {
+                        settingsRowLabel(title: "Privacy Policy", subtitle: "View full policy in-app", iconName: "doc.text")
                     }
                     
                     Button {
@@ -160,6 +176,22 @@ public struct SettingsView: View {
                     } label: {
                         settingsRowLabel(title: "Check for Updates", subtitle: "Compare with App Store version", iconName: "arrow.down.circle")
                             .foregroundColor(theme.textPrimary)
+                    }
+                    
+                    NavigationLink(destination: AboutAppView()) {
+                        settingsRowLabel(title: "About App", subtitle: "App info, links, and credits", iconName: "info.circle")
+                    }
+                    
+                    NavigationLink(destination: ChangelogListView()) {
+                        settingsRowLabel(title: "Changelog", subtitle: "Browse full release history", iconName: "clock.arrow.circlepath")
+                    }
+                    
+                    NavigationLink(destination: AboutDeveloperView()) {
+                        settingsRowLabel(title: "About Developer", subtitle: "Credits, mission, and privacy links", iconName: "person.crop.circle")
+                    }
+                    
+                    NavigationLink(destination: PraiseAppPromoView()) {
+                        settingsRowLabel(title: "Worship Companion +", subtitle: "Download our praise & worship lyrics app", iconName: "sparkles")
                     }
                 }
                 .listRowBackground(theme.cardBackground)
@@ -266,10 +298,23 @@ public struct SettingsView: View {
         }
         .onAppear {
             privacyAccepted = supabase.currentUser?.privacyPolicyAccepted ?? (UserDefaults.standard.integer(forKey: "csi_privacy_accepted_local") == 1)
+            midiInstrumentId = MidiInstruments.currentProgramId
+            refreshAdminEntry()
         }
         .task {
             await supabase.refreshDisplayName()
+            await appConfig.refresh()
+            refreshAdminEntry()
         }
+    }
+    
+    private func refreshAdminEntry() {
+        let email = supabase.currentUserEmail
+        let remoteEmails = appConfig.config.adminEmails
+            ?? UserDefaults.standard.string(forKey: "admin_emails_cached")
+        showAdminEntry = AdminPrefs.hasAnyAdminRole(currentUserEmail: email, adminEmailsConfig: remoteEmails)
+            || (email.map { AdminPrefs.localFallbackEmails.contains($0.lowercased()) } ?? false)
+            || AdminPrefs.isSudoAdminEnabled
     }
     
     // MARK: - Bindings
@@ -289,7 +334,7 @@ public struct SettingsView: View {
     // MARK: - Subviews
     
     private var themeRedesignedPicker: some View {
-        HStack(spacing: 12) {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
             ForEach(AppTheme.allCases) { appTheme in
                 let isSelected = theme.activeTheme == appTheme
                 Button {
@@ -322,10 +367,11 @@ public struct SettingsView: View {
                         Text(appTheme.rawValue)
                             .font(.system(size: 11, weight: .bold))
                             .foregroundColor(theme.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
                 }
                 .buttonStyle(PlainButtonStyle())
-                .frame(maxWidth: .infinity)
             }
         }
         .padding(.vertical, 8)
@@ -333,6 +379,7 @@ public struct SettingsView: View {
     
     private func previewBgColor(for theme: AppTheme) -> Color {
         switch theme {
+        case .system: return Color(hex: "9CA3AF")
         case .light: return Color(hex: "FFFFFF")
         case .dark: return Color(hex: "1B263B")
         case .amoled: return Color.black
@@ -342,7 +389,7 @@ public struct SettingsView: View {
     private func previewTextColor(for theme: AppTheme) -> Color {
         switch theme {
         case .light: return Color(hex: "1F2937")
-        case .dark, .amoled: return Color.white
+        case .system, .dark, .amoled: return Color.white
         }
     }
     
@@ -501,6 +548,9 @@ public struct SettingsView: View {
         UserDefaults.standard.removeObject(forKey: "orderOfServiceData")
         UserDefaults.standard.removeObject(forKey: "lastOrderOfServiceUpdate")
         UserDefaults.standard.removeObject(forKey: "csi_cached_liturgies_json")
+        MidiFileCache.shared.invalidateAll()
+        UserDefaults.standard.removeObject(forKey: "cached_midi_files_json")
+        UserDefaults.standard.removeObject(forKey: "cached_midi_files_fingerprint")
         
         // Dynamic notification broadcast to update liturgy reader lists
         NotificationCenter.default.post(name: Notification.Name("csi_liturgies_refreshed"), object: nil)

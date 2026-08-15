@@ -3,6 +3,7 @@ import Observation
 
 /// The active theme modes supported throughout the application.
 public enum AppTheme: String, CaseIterable, Identifiable, Codable {
+    case system = "System"
     case light = "Light Mode"
     case dark = "Dark Mode"
     case amoled = "AMOLED Black"
@@ -70,7 +71,7 @@ public enum AppAccentColor: String, CaseIterable, Identifiable, Codable {
     
     public var textPairing: Color {
         switch self {
-        case .amber: return Color(hex: "1F2937") // Dark slate for clear contrast on Gold
+        case .amber: return Color(hex: "1F2937")
         default: return Color.white
         }
     }
@@ -98,7 +99,6 @@ public final class ThemeManager {
         isChristmas ? ChristmasColors.christmasRed : selectedAccent.color
     }
     
-    /// Whether festive Christmas styling should currently be applied app-wide.
     private var isChristmas: Bool {
         ChristmasModeService.shared.isChristmasTime
     }
@@ -113,9 +113,33 @@ public final class ThemeManager {
         updateSystemAppearance()
     }
     
-    /// Maps our custom themes to standard SwiftUI ColorSchemes.
-    public var colorScheme: ColorScheme {
+    /// Whether the effective appearance is dark (including system + AMOLED).
+    public var effectiveIsDark: Bool {
         switch activeTheme {
+        case .light:
+            return false
+        case .dark, .amoled:
+            return true
+        case .system:
+            return UITraitCollection.current.userInterfaceStyle == .dark
+        }
+    }
+    
+    /// Resolved palette mode used for semantic colors.
+    private var paletteTheme: AppTheme {
+        switch activeTheme {
+        case .system:
+            return effectiveIsDark ? .dark : .light
+        case .light, .dark, .amoled:
+            return activeTheme
+        }
+    }
+    
+    /// `nil` follows the system appearance (Android ThemeMode.SYSTEM parity).
+    public var preferredColorScheme: ColorScheme? {
+        switch activeTheme {
+        case .system:
+            return nil
         case .light:
             return .light
         case .dark, .amoled:
@@ -123,75 +147,88 @@ public final class ThemeManager {
         }
     }
     
+    /// Legacy accessor used by older call sites.
+    public var colorScheme: ColorScheme {
+        preferredColorScheme ?? (effectiveIsDark ? .dark : .light)
+    }
+    
     // MARK: - Semantic Color Tokens
     
     public var backgroundColor: Color {
-        switch activeTheme {
+        switch paletteTheme {
         case .light:
             return isChristmas ? ChristmasColors.lightBackground : Color(hex: "F4F6F9")
         case .dark:
             return isChristmas ? ChristmasColors.darkBackground : Color(hex: "0D1B2A")
         case .amoled:
             return Color.black
+        case .system:
+            return Color(hex: "0D1B2A")
         }
     }
     
     public var secondaryBackgroundColor: Color {
-        switch activeTheme {
+        switch paletteTheme {
         case .light:
             return isChristmas ? ChristmasColors.lightSurface : Color(hex: "FFFFFF")
         case .dark:
             return isChristmas ? ChristmasColors.darkSurface : Color(hex: "1B263B")
         case .amoled:
             return Color(hex: "121212")
+        case .system:
+            return Color(hex: "1B263B")
         }
     }
     
     public var cardBackground: Color {
-        switch activeTheme {
+        switch paletteTheme {
         case .light:
             return isChristmas ? ChristmasColors.snowWhite : Color(hex: "FFFFFF")
         case .dark:
             return isChristmas ? ChristmasColors.darkSurfaceContainer : Color.white.opacity(0.05)
         case .amoled:
             return Color(hex: "181818")
+        case .system:
+            return Color.white.opacity(0.05)
         }
     }
     
     public var cardStroke: Color {
-        switch activeTheme {
+        switch paletteTheme {
         case .light:
             return Color.black.opacity(0.06)
         case .dark:
             return Color.white.opacity(0.12)
         case .amoled:
             return Color.white.opacity(0.15)
+        case .system:
+            return Color.white.opacity(0.12)
         }
     }
     
     public var textPrimary: Color {
-        switch activeTheme {
+        switch paletteTheme {
         case .light:
             return Color(hex: "1F2937")
-        case .dark, .amoled:
+        case .dark, .amoled, .system:
             return Color.white
         }
     }
     
     public var textSecondary: Color {
-        switch activeTheme {
+        switch paletteTheme {
         case .light:
             return Color(hex: "4B5563")
-        case .dark, .amoled:
+        case .dark, .amoled, .system:
             return Color.white.opacity(0.6)
         }
     }
     
     public var shadowColor: Color {
-        switch activeTheme {
+        switch paletteTheme {
         case .light:
             return Color.black.opacity(0.05)
-        case .dark, .amoled:
+        case .dark, .amoled, .system:
             return Color.black.opacity(0.3)
         }
     }
@@ -204,9 +241,8 @@ public final class ThemeManager {
         cardStroke
     }
     
-    /// Global gradient background setup
     public var backgroundGradient: LinearGradient {
-        switch activeTheme {
+        switch paletteTheme {
         case .light:
             return LinearGradient(
                 colors: isChristmas
@@ -229,6 +265,12 @@ public final class ThemeManager {
                 startPoint: .top,
                 endPoint: .bottom
             )
+        case .system:
+            return LinearGradient(
+                colors: [Color(hex: "0D1B2A"), Color(hex: "1B263B")],
+                startPoint: .top,
+                endPoint: .bottom
+            )
         }
     }
     
@@ -237,22 +279,22 @@ public final class ThemeManager {
     public func updateSystemAppearance() {
         let style: UIUserInterfaceStyle
         switch activeTheme {
+        case .system:
+            style = .unspecified
         case .light:
             style = .light
         case .dark, .amoled:
             style = .dark
         }
         
-        // Liquid Glass: use system default translucent nav/tab chrome (do not force opaque colors).
         let navAppearance = UINavigationBarAppearance()
         navAppearance.configureWithDefaultBackground()
-        switch activeTheme {
-        case .light:
-            navAppearance.titleTextAttributes = [.foregroundColor: UIColor(red: 31/255, green: 41/255, blue: 55/255, alpha: 1)]
-            navAppearance.largeTitleTextAttributes = [.foregroundColor: UIColor(red: 31/255, green: 41/255, blue: 55/255, alpha: 1)]
-        case .dark, .amoled:
+        if effectiveIsDark {
             navAppearance.titleTextAttributes = [.foregroundColor: UIColor.white]
             navAppearance.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
+        } else {
+            navAppearance.titleTextAttributes = [.foregroundColor: UIColor(red: 31/255, green: 41/255, blue: 55/255, alpha: 1)]
+            navAppearance.largeTitleTextAttributes = [.foregroundColor: UIColor(red: 31/255, green: 41/255, blue: 55/255, alpha: 1)]
         }
         
         UINavigationBar.appearance().standardAppearance = navAppearance

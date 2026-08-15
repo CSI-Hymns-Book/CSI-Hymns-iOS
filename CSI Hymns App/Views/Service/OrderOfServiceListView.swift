@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Core Page structure for liturgies downloaded from remote JSON.
 public struct OrderPage: Codable, Identifiable, Hashable, Sendable {
-    public var id: Int { pageNo }
+    public var id: String { "\(type)-\(pageNo)" }
     public var pageNo: Int
     public var title: String?
     public var content: String
@@ -22,61 +22,9 @@ public struct OrderPage: Codable, Identifiable, Hashable, Sendable {
         self.type = type
     }
     
-    /// Parses JSON input containing either Flat List, Grouped Map, or Legacy Backwards Map structures.
+    /// Parses JSON input containing Flat List, Grouped Map (+ index), or Legacy map structures.
     public static func parsePages(from data: Data) throws -> [OrderPage] {
-        var decodedPages: [OrderPage] = []
-        let jsonObject = try JSONSerialization.jsonObject(with: data, options: [])
-        
-        if let list = jsonObject as? [[String: Any]] {
-            for item in list {
-                let pageNo: Int
-                if let no = item["page_no"] as? Int {
-                    pageNo = no
-                } else if let noStr = item["page_no"] as? String, let no = Int(noStr) {
-                    pageNo = no
-                } else {
-                    continue
-                }
-                
-                let title = item["title"] as? String
-                let content = (item["content"] ?? "") as? String ?? ""
-                let type = (item["type"] ?? "regular") as? String ?? "regular"
-                
-                decodedPages.append(OrderPage(pageNo: pageNo, title: title, content: content, type: type))
-            }
-        } else if let dict = jsonObject as? [String: Any] {
-            if dict.keys.contains("regular") || dict.keys.contains("festival") {
-                for key in ["regular", "festival"] {
-                    if let block = dict[key] as? [[String: Any]] {
-                        for item in block {
-                            let pageNo: Int
-                            if let no = item["page_no"] as? Int {
-                                pageNo = no
-                            } else if let noStr = item["page_no"] as? String, let no = Int(noStr) {
-                                pageNo = no
-                            } else {
-                                continue
-                            }
-                            
-                            let title = item["title"] as? String
-                            let content = (item["content"] ?? "") as? String ?? ""
-                            
-                            decodedPages.append(OrderPage(pageNo: pageNo, title: title, content: content, type: key))
-                        }
-                    }
-                }
-            } else {
-                for (k, v) in dict {
-                    let pageNo = Int(k) ?? 0
-                    let content = String(describing: v)
-                    decodedPages.append(OrderPage(pageNo: pageNo, title: nil, content: content, type: "regular"))
-                }
-            }
-        } else {
-            throw NSError(domain: "LiturgyParser", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid JSON structure"])
-        }
-        
-        return decodedPages.sorted(by: { $0.pageNo < $1.pageNo })
+        try OrderOfServiceStore.parseDocument(from: data).pages
     }
 }
 
@@ -386,81 +334,15 @@ public struct OrderOfServiceListView: View {
     
     /// Startup routine to automatically fetch and cache remote liturgies if elapsed time exceeds 3 days.
     private func checkAndUpdateOrderOfServiceOnOpen() async {
-        // Ensure local-first fallback is populated on first launch
-        if UserDefaults.standard.data(forKey: "orderOfServiceData") == nil {
-            if let seedData = LiturgyOfflineSeeds.fallbackJSON.data(using: .utf8) {
-                UserDefaults.standard.set(seedData, forKey: "orderOfServiceData")
-                print("[OrderOfService] Initialized cache with offline seeds fallback.")
-            }
-        }
-        
-        let last = UserDefaults.standard.double(forKey: "lastOrderOfServiceUpdate")
-        let now = Date().timeIntervalSince1970 * 1000 // millisecond epoch
-        let interval: Double = 3 * 24 * 60 * 60 * 1000 // 3 days
-        
-        print("[OrderOfService] Startup check: last=\(last) now=\(now) delta=\(now - last) interval=\(interval)")
-        
-        if now - last < interval {
-            print("[OrderOfService] Within 3-day cache window, skipping remote fetch.")
-            return
-        }
-        
-        print("[OrderOfService] Cache expired or missing, starting background remote fetch.")
-        Task {
-            do {
-                let url = URL(string: "https://raw.githubusercontent.com/Reynold29/csi-hymns-vault/refs/heads/main/order-of-service_data.json")!
-                let (data, response) = try await URLSession.shared.data(from: url)
-                
-                if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
-                    // Pre-decode check to ensure structure safety
-                    _ = try OrderPage.parsePages(from: data)
-                    
-                    // Persist cache and save timestamp
-                    UserDefaults.standard.set(data, forKey: "orderOfServiceData")
-                    UserDefaults.standard.set(now, forKey: "lastOrderOfServiceUpdate")
-                    print("[OrderOfService] Startup update succeeded.")
-                    
-                    // Notify reader view to reload pages dynamically
-                    NotificationCenter.default.post(name: Notification.Name("csi_liturgies_refreshed"), object: nil)
-                }
-            } catch {
-                print("[OrderOfService] Startup background sync failed: \(error)")
-            }
-        }
+        await OrderOfServiceStore.ensureSeededAndRefreshIfStale()
     }
     
     /// Triggered by manual refresh button: bypasses the cache window, fetches fresh JSON, and triggers notifications.
     private func refreshLiturgyCaches() async {
         isRefreshing = true
-        let url = URL(string: "https://raw.githubusercontent.com/Reynold29/csi-hymns-vault/refs/heads/main/order-of-service_data.json")!
-        let now = Date().timeIntervalSince1970 * 1000
-        
-        do {
-            let (data, response) = try await URLSession.shared.data(from: url)
-            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
-                // Pre-decode check to ensure structure safety
-                _ = try OrderPage.parsePages(from: data)
-                
-                // Persist cache and save timestamp
-                UserDefaults.standard.set(data, forKey: "orderOfServiceData")
-                UserDefaults.standard.set(now, forKey: "lastOrderOfServiceUpdate")
-                
-                // Feedback
-                let generator = UINotificationFeedbackGenerator()
-                generator.notificationOccurred(.success)
-                
-                // Notify reader view to reload pages dynamically
-                NotificationCenter.default.post(name: Notification.Name("csi_liturgies_refreshed"), object: nil)
-                print("[OrderOfService] Manual refresh succeeded.")
-            } else {
-                throw NSError(domain: "OrderOfServiceListView", code: 2, userInfo: [NSLocalizedDescriptionKey: "HTTP non-200 response"])
-            }
-        } catch {
-            print("OrderOfServiceListView: Remote updates failed: \(error)")
-            let generator = UINotificationFeedbackGenerator()
-            generator.notificationOccurred(.error)
-        }
-        
+        let ok = await OrderOfServiceStore.refreshFromNetwork(force: true)
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(ok ? .success : .error)
         isRefreshing = false
     }
 }

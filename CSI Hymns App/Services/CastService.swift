@@ -27,6 +27,7 @@ public final class CastService {
     public private(set) var featureEnabled = false
     public private(set) var appId: String? = nil
     public private(set) var receiverURL: String? = nil
+    public private(set) var isConnected = false
     private var didInitializeContext = false
     
     private static let keyEnabled = "cast_enabled"
@@ -87,6 +88,27 @@ public final class CastService {
         options.physicalVolumeButtonsWillControlDeviceVolume = true
         GCKCastContext.setSharedInstanceWith(options)
         didInitializeContext = true
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name.GCKCastSessionDidStart,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.isConnected = true
+        }
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name.GCKCastSessionDidEnd,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.isConnected = false
+        }
         #endif
+    }
+    
+    public func disconnect() {
+        #if canImport(GoogleCast)
+        GCKCastContext.sharedInstance().sessionManager.endSessionAndStopCasting(true)
+        #endif
+        isConnected = false
     }
 }

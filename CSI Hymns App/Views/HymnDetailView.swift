@@ -93,6 +93,15 @@ public struct HymnDetailView: View {
     @State private var selectedTune: String? = nil
     @State private var isShowingAdvancedMidi = false
     @State private var isViewReady = false
+    @State private var scrollOffset: Double = 0
+    @State private var pendingScrollRestore: Double? = nil
+    @State private var showCastSheet = false
+    @State private var castSongTitle: String = ""
+    @State private var midiFilesList: [String] = []
+    @State private var audioErrorMessage: String?
+    @State private var forceOggPlayer = false
+    @State private var showAudioContribution = false
+    @Environment(\.scenePhase) private var scenePhase
     
     public init(hymn: Hymn) {
         self.hymn = hymn
@@ -139,13 +148,15 @@ public struct HymnDetailView: View {
                                     if !isHidden {
                                         sidebarToolbarRow
                                         
-                                        metadataHeaderCard
+                                        metadataHeaderCard(compact: false)
                                         
                                         sidebarSettingsPanel
+                                    } else {
+                                        metadataHeaderCard(compact: true)
                                     }
                                     
                                     if isAudioPlayerVisible {
-                                        if hymn.type == "mt" {
+                                        if usesMidiPlayback {
                                             glassmorphicMidiPlayer(isEmbedded: true)
                                         } else {
                                             glassmorphicAudioPlayer(isEmbedded: true)
@@ -169,7 +180,6 @@ public struct HymnDetailView: View {
                 } else {
                     // Portrait Layout
                     VStack(spacing: 0) {
-                        // Header Panel: Bilingual Toggles, Zoom controls & Audio toggle
                         if !isHidden {
                             headerPanel
                                 .padding(.horizontal)
@@ -181,10 +191,15 @@ public struct HymnDetailView: View {
                                 .padding(.vertical, 8)
                                 .transition(.opacity)
                             
-                            // Elegant metadata header card
-                            metadataHeaderCard
+                            metadataHeaderCard(compact: false)
                                 .padding(.bottom, 8)
                                 .transition(.move(edge: .top).combined(with: .opacity))
+                        } else {
+                            // Immersive mode: keep only hymn number + title for reference.
+                            metadataHeaderCard(compact: true)
+                                .padding(.top, 8)
+                                .padding(.bottom, 6)
+                                .transition(.opacity)
                         }
                         
                         // Lyrics: page-flip when enabled in Settings, otherwise continuous scroll.
@@ -200,7 +215,7 @@ public struct HymnDetailView: View {
                         
                         // Integrated glassmorphic player
                         if isAudioPlayerVisible {
-                            if hymn.type == "mt" {
+                            if usesMidiPlayback {
                                 glassmorphicMidiPlayer(isEmbedded: false)
                                     .transition(.move(edge: .bottom).combined(with: .opacity))
                             } else {
@@ -213,99 +228,46 @@ public struct HymnDetailView: View {
                 }
             } // closes ZStack
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    if !isLandscape {
-                        HStack(spacing: 12) {
-                            Button {
-                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                    isHidden.toggle()
-                                }
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: isHidden ? "eye" : "eye.slash")
-                                        .font(.system(size: 11, weight: .bold))
-                                    Text(isHidden ? "Show Actions" : "Hide Actions")
-                                        .font(.system(size: 11, weight: .bold))
-                                }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(theme.surfaceColor)
-                                .cornerRadius(8)
+                ToolbarItem(placement: .topBarLeading) {
+                    if !isLandscape || isHidden {
+                        hideActionsChip
+                    }
+                }
+                
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    AirPlayRoutePicker()
+                        .frame(width: 28, height: 28)
+                    
+                    if CastService.shared.featureEnabled {
+                        Button {
+                            castSongTitle = "\(hymn.type == "keerthane" ? "Keerthane" : (hymn.type == "mt" ? "M.T." : "Hymn")) \(hymn.number) — \(hymn.title)"
+                            showCastSheet = true
+                        } label: {
+                            Image(systemName: "airplayaudio")
                                 .foregroundColor(theme.textPrimary)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(theme.strokeColor, lineWidth: 1)
-                                )
-                            }
-                            
-                            // Casting pickers (AirPlay always; Chromecast when remotely enabled)
-                            AirPlayRoutePicker()
-                                .frame(width: 28, height: 28)
-                            
-                            CastButton(tint: theme.textPrimary)
-                            
-                            // Issue reporter
-                            Button {
-                                viewModel.isShowingReportSheet = true
-                            } label: {
-                                Image(systemName: "exclamationmark.bubble")
-                                    .foregroundColor(theme.textPrimary)
-                            }
-                            
-                            // Heart-shaped toggle favorite buttons
-                            Button {
-                                let isFav = favoritesManager.isFavorite(songId: hymn.id)
-                                withAnimation(.spring(response: 0.35, dampingFraction: 0.5)) {
-                                    favoriteScale = 1.4
-                                    favoritesManager.toggleFavorite(song: hymn)
-                                }
-                                Task {
-                                    try? await Task.sleep(for: .seconds(0.15))
-                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.5)) {
-                                        favoriteScale = 1.0
-                                    }
-                                }
-                                PostHogService.shared.track(event: isFav ? "song_favorite_removed" : "song_favorite_added", properties: [
-                                    "song_id": hymn.id,
-                                    "song_number": hymn.number,
-                                    "song_type": hymn.type,
-                                    "song_title": hymn.title
-                                ])
-                            } label: {
-                                Image(systemName: favoritesManager.isFavorite(songId: hymn.id) ? "heart.fill" : "heart")
-                                    .foregroundColor(favoritesManager.isFavorite(songId: hymn.id) ? .red : theme.textPrimary)
-                                    .scaleEffect(favoriteScale)
-                            }
                         }
-                    } else {
-                        if isHidden {
-                            Button {
-                                withAnimation(.spring()) {
-                                    isHidden.toggle()
-                                }
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "eye")
-                                        .font(.system(size: 11, weight: .bold))
-                                    Text("Show Actions")
-                                        .font(.system(size: 11, weight: .bold))
-                                }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(theme.surfaceColor)
-                                .cornerRadius(8)
-                                .foregroundColor(theme.textPrimary)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(theme.strokeColor, lineWidth: 1)
-                                )
-                            }
-                        }
+                    }
+                    
+                    CastButton(tint: theme.textPrimary)
+                    
+                    Button {
+                        viewModel.isShowingReportSheet = true
+                    } label: {
+                        Image(systemName: "exclamationmark.bubble")
+                            .foregroundColor(theme.textPrimary)
+                    }
+                    
+                    Button {
+                        toggleFavorite()
+                    } label: {
+                        Image(systemName: favoritesManager.isFavorite(songId: hymn.id) ? "heart.fill" : "heart")
+                            .foregroundColor(favoritesManager.isFavorite(songId: hymn.id) ? .red : theme.textPrimary)
+                            .scaleEffect(favoriteScale)
                     }
                 }
             }
         } // closes GeometryReader
-        .navigationTitle("\(hymn.type == "keerthane" ? "Keerthane" : "Hymn") \(hymn.number)")
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .csiGlassNavigationBar(theme: theme)
         // Immersive reading navbar auto-hide behavior
@@ -313,11 +275,31 @@ public struct HymnDetailView: View {
         .sheet(isPresented: $viewModel.isShowingReportSheet) {
             reportLyricsSheet
         }
+        .sheet(isPresented: $showCastSheet) {
+            CastControlSheet(songTitle: castSongTitle)
+                .presentationDetents([.medium])
+        }
+        .sheet(isPresented: $showAudioContribution) {
+            AudioContributionView(
+                songType: hymn.type == "keerthane" ? "Keerthane" : (hymn.type == "mt" ? "M.T. Hymn" : "Hymn"),
+                songNumber: hymn.number,
+                songTitle: hymn.title
+            ) {
+                showAudioContribution = false
+                isAudioPlayerVisible = false
+                stopAudioPlayback()
+            }
+            .presentationDetents([.medium, .large])
+        }
         .onAppear {
             let progress = ReadingProgressService.load(itemType: hymn.type, itemId: "\(hymn.number)")
             if let lang = progress.language {
                 viewModel.selectedLanguage = lang == "english" ? .english : .kannada
             }
+            if let font = progress.fontSize {
+                viewModel.fontSize = CGFloat(font)
+            }
+            pendingScrollRestore = progress.scrollOffset
             let prefix = hymn.type.lowercased() == "keerthane" ? "keerthane_" : "hymn_"
             RecentSongsService.shared.addRecentSong(prefix: prefix, number: hymn.number)
             PostHogService.shared.trackScreen("\(hymn.type.capitalized) Detail Screen")
@@ -338,13 +320,24 @@ public struct HymnDetailView: View {
                 itemType: hymn.type,
                 itemId: "\(hymn.number)",
                 fontSize: Double(viewModel.fontSize),
-                language: viewModel.selectedLanguage == .english ? "english" : "kannada"
+                language: viewModel.selectedLanguage == .english ? "english" : "kannada",
+                scrollOffset: scrollOffset
             )
             audio.pause()
             midiAudio.stop()
         }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background || phase == .inactive {
+                // Android ACTION_SCREEN_OFF parity — pause when leaving the screen.
+                if midiAudio.isPlaying { midiAudio.pausePlayback() }
+                if audio.isPlaying { audio.pause() }
+            }
+        }
         .task(id: hymn.id) {
-            tuneOptions = SongAudioURL.extractTuneOptions(for: hymn)
+            await MidiFileCatalog.shared.refresh()
+            midiFilesList = MidiFileCatalog.shared.fileNames
+            
+            tuneOptions = SongAudioURL.extractTuneOptions(for: hymn, midiFiles: midiFilesList)
             selectedTune = tuneOptions.first
             
             if hymn.type == "mt" {
@@ -355,7 +348,7 @@ public struct HymnDetailView: View {
                             let candidate = cleanBase + suffix
                             if candidate != opt {
                                 group.addTask {
-                                    let urlStr = SongAudioURL.streamURL(for: hymn, selectedTune: candidate)
+                                    let urlStr = SongAudioURL.streamURL(for: hymn, selectedTune: candidate, midiFiles: midiFilesList)
                                     if await SongAudioURL.checkUrlExists(urlStr: urlStr) {
                                         return candidate
                                     }
@@ -426,46 +419,7 @@ public struct HymnDetailView: View {
                 
                 Spacer()
                 
-                // Audio Toggle
-                Button {
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        isAudioPlayerVisible.toggle()
-                        if isAudioPlayerVisible {
-                            let streamUrl = SongAudioURL.streamURL(for: hymn, selectedTune: selectedTune)
-                            if hymn.type == "mt" {
-                                Task {
-                                    await midiAudio.loadAndPlay(urlString: streamUrl)
-                                }
-                            } else {
-                                audio.loadAndPlay(urlString: streamUrl, title: "\(hymn.type == "keerthane" ? "Keerthane" : "Hymn") \(hymn.number)", subtitle: hymn.title)
-                            }
-                        } else {
-                            if hymn.type == "mt" {
-                                midiAudio.stop()
-                            } else {
-                                audio.pause()
-                            }
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        let playing = hymn.type == "mt" ? midiAudio.isPlaying : audio.isPlaying
-                        Image(systemName: isAudioPlayerVisible ? (playing ? "waveform.and.mic" : "pause.circle.fill") : "play.circle.fill")
-                            .font(.system(size: 14))
-                        Text(isAudioPlayerVisible ? "Hide Player" : "Show Player")
-                            .font(.system(size: 12, weight: .semibold))
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(isAudioPlayerVisible ? theme.textPrimary.opacity(0.12) : theme.surfaceColor)
-                    .cornerRadius(10)
-                    .foregroundColor(theme.textPrimary)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(isAudioPlayerVisible ? theme.textPrimary.opacity(0.3) : theme.strokeColor, lineWidth: 1)
-                    )
-                }
+                audioIntentChip
             }
             
             // Bilingual Language Selector
@@ -501,40 +455,130 @@ public struct HymnDetailView: View {
         )
     }
     
-    private var sidebarToolbarRow: some View {
-        HStack {
-            Button {
-                withAnimation(.spring()) {
-                    isHidden.toggle()
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "eye.slash")
-                        .font(.system(size: 11, weight: .bold))
-                    Text("Hide Actions")
-                        .font(.system(size: 11, weight: .bold))
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(theme.surfaceColor)
-                .cornerRadius(8)
-                .foregroundColor(theme.textPrimary)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(theme.strokeColor, lineWidth: 1)
-                )
+    private var hideActionsChip: some View {
+        Button {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                isHidden.toggle()
             }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: isHidden ? "eye" : "eye.slash")
+                    .font(.system(size: 12, weight: .semibold))
+                Text(isHidden ? "Show Actions" : "Hide Actions")
+                    .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1)
+            }
+            .foregroundColor(theme.textPrimary)
+        }
+        .accessibilityLabel(isHidden ? "Show Actions" : "Hide Actions")
+    }
+    
+    private func toggleFavorite() {
+        let isFav = favoritesManager.isFavorite(songId: hymn.id)
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.5)) {
+            favoriteScale = 1.4
+            favoritesManager.toggleFavorite(song: hymn)
+        }
+        Task {
+            try? await Task.sleep(for: .seconds(0.15))
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.5)) {
+                favoriteScale = 1.0
+            }
+        }
+        PostHogService.shared.track(event: isFav ? "song_favorite_removed" : "song_favorite_added", properties: [
+            "song_id": hymn.id,
+            "song_number": hymn.number,
+            "song_type": hymn.type,
+            "song_title": hymn.title
+        ])
+    }
+    
+    /// Audio chip: first tap opens + plays; later taps pause/resume. Close only via player X.
+    private func handleAudioIntentTap() {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        if isAudioPlayerVisible {
+            if usesMidiPlayback {
+                midiAudio.togglePlayback()
+            } else {
+                audio.togglePlayback()
+            }
+            return
+        }
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            isAudioPlayerVisible = true
+        }
+        startAudioPlayback()
+        PostHogService.shared.track(event: "audio_playback_started", properties: [
+            "song_id": hymn.id,
+            "song_number": hymn.number,
+            "song_type": hymn.type,
+            "song_title": hymn.title
+        ])
+    }
+    
+    private func closeAudioPlayer() {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            isAudioPlayerVisible = false
+        }
+        stopAudioPlayback()
+        PostHogService.shared.track(event: "audio_playback_dismissed", properties: [
+            "song_id": hymn.id,
+            "song_number": hymn.number,
+            "song_type": hymn.type
+        ])
+    }
+    
+    @ViewBuilder
+    private var audioIntentChip: some View {
+        let playing = usesMidiPlayback ? midiAudio.isPlaying : audio.isPlaying
+        let loading = usesMidiPlayback ? midiAudio.isLoading : audio.isLoading
+        
+        Button(action: handleAudioIntentTap) {
+            HStack(spacing: 5) {
+                if loading {
+                    ProgressView()
+                        .controlSize(.mini)
+                } else if isAudioPlayerVisible && playing {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 13, weight: .semibold))
+                        .symbolEffect(.variableColor.iterative, options: .repeating, isActive: true)
+                } else if isAudioPlayerVisible {
+                    Image(systemName: "pause.fill")
+                        .font(.system(size: 12, weight: .bold))
+                } else {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 12, weight: .bold))
+                }
+                
+                Text(isAudioPlayerVisible ? (playing ? "Playing" : "Paused") : "Audio")
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(isAudioPlayerVisible ? theme.textPrimary.opacity(0.12) : theme.surfaceColor)
+            .cornerRadius(10)
+            .foregroundColor(theme.textPrimary)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(isAudioPlayerVisible ? theme.textPrimary.opacity(0.3) : theme.strokeColor, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+    
+    private var sidebarToolbarRow: some View {
+        HStack(spacing: 10) {
+            hideActionsChip
             
-            Spacer()
+            Spacer(minLength: 0)
             
-            HStack(spacing: 16) {
-                // Casting pickers (AirPlay always; Chromecast when remotely enabled)
+            HStack(spacing: 14) {
                 AirPlayRoutePicker()
                     .frame(width: 24, height: 24)
                 
                 CastButton(tint: theme.textPrimary)
                 
-                // Issue reporter
                 Button {
                     viewModel.isShowingReportSheet = true
                 } label: {
@@ -542,40 +586,23 @@ public struct HymnDetailView: View {
                         .foregroundColor(theme.textPrimary)
                 }
                 
-                // Heart-shaped toggle favorite buttons
                 Button {
-                    let isFav = favoritesManager.isFavorite(songId: hymn.id)
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.5)) {
-                        favoriteScale = 1.4
-                        favoritesManager.toggleFavorite(song: hymn)
-                    }
-                    Task {
-                        try? await Task.sleep(for: .seconds(0.15))
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.5)) {
-                            favoriteScale = 1.0
-                        }
-                    }
-                    PostHogService.shared.track(event: isFav ? "song_favorite_removed" : "song_favorite_added", properties: [
-                        "song_id": hymn.id,
-                        "song_number": hymn.number,
-                        "song_type": hymn.type,
-                        "song_title": hymn.title
-                    ])
+                    toggleFavorite()
                 } label: {
                     Image(systemName: favoritesManager.isFavorite(songId: hymn.id) ? "heart.fill" : "heart")
                         .foregroundColor(favoritesManager.isFavorite(songId: hymn.id) ? .red : theme.textPrimary)
                         .scaleEffect(favoriteScale)
                 }
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(theme.cardBackground)
+            .clipShape(Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(theme.strokeColor, lineWidth: 1)
+            )
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(theme.cardBackground)
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(theme.strokeColor, lineWidth: 1)
-        )
     }
     
     private var headerPanel: some View {
@@ -613,58 +640,8 @@ public struct HymnDetailView: View {
             .cornerRadius(10)
             .layoutPriority(0.3)
             
-            // Audio Intent Button (plays only on deliberate tap)
-            Button {
-                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                    isAudioPlayerVisible.toggle()
-                    if isAudioPlayerVisible {
-                        let streamUrl = SongAudioURL.streamURL(for: hymn, selectedTune: selectedTune)
-                        if hymn.type == "mt" {
-                            Task {
-                                await midiAudio.loadAndPlay(urlString: streamUrl)
-                            }
-                        } else {
-                            audio.loadAndPlay(urlString: streamUrl, title: "\(hymn.type == "keerthane" ? "Keerthane" : "Hymn") \(hymn.number)", subtitle: hymn.title)
-                        }
-                        PostHogService.shared.track(event: "audio_playback_started", properties: [
-                            "song_id": hymn.id,
-                            "song_number": hymn.number,
-                            "song_type": hymn.type,
-                            "song_title": hymn.title
-                        ])
-                    } else {
-                        if hymn.type == "mt" {
-                            midiAudio.stop()
-                        } else {
-                            audio.pause()
-                        }
-                        PostHogService.shared.track(event: "audio_playback_dismissed", properties: [
-                            "song_id": hymn.id,
-                            "song_number": hymn.number,
-                            "song_type": hymn.type
-                        ])
-                    }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    let playing = hymn.type == "mt" ? midiAudio.isPlaying : audio.isPlaying
-                    Image(systemName: isAudioPlayerVisible ? (playing ? "waveform.and.mic" : "pause.circle.fill") : "play.circle.fill")
-                        .font(.system(size: 14))
-                    Text(isAudioPlayerVisible ? (playing ? "Playing" : "Paused") : "Audio")
-                        .font(.system(size: 12, weight: .semibold))
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(isAudioPlayerVisible ? theme.textPrimary.opacity(0.12) : theme.surfaceColor)
-                .cornerRadius(10)
-                .foregroundColor(theme.textPrimary)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(isAudioPlayerVisible ? theme.textPrimary.opacity(0.3) : theme.strokeColor, lineWidth: 1)
-                )
-            }
-            .layoutPriority(0.3)
+            audioIntentChip
+                .layoutPriority(0.3)
             
             Spacer(minLength: 4)
             
@@ -704,33 +681,35 @@ public struct HymnDetailView: View {
     }
 
     
-    private var metadataHeaderCard: some View {
-        VStack(spacing: 8) {
+    private func metadataHeaderCard(compact: Bool) -> some View {
+        VStack(spacing: compact ? 0 : 8) {
             HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: compact ? 2 : 4) {
                     Text("\(hymn.type.uppercased()) NO. \(hymn.number)")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.system(size: compact ? 10 : 11, weight: .bold))
                         .foregroundColor(theme.textSecondary.opacity(0.8))
                         .tracking(1.5)
                     
                     Text(hymn.title)
-                        .font(.system(size: 18, weight: .bold))
+                        .font(.system(size: compact ? 15 : 18, weight: .bold))
                         .foregroundColor(theme.textPrimary)
                         .multilineTextAlignment(.leading)
+                        .lineLimit(compact ? 2 : nil)
                 }
-                Spacer()
+                Spacer(minLength: 8)
                 
-                // Song type badge
-                Text(hymn.type == "keerthane" ? "Keerthane" : "Hymn")
-                    .font(.system(size: 11, weight: .bold))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(theme.textPrimary.opacity(0.08))
-                    .cornerRadius(6)
-                    .foregroundColor(theme.textPrimary)
+                if !compact {
+                    Text(hymn.type == "keerthane" ? "Keerthane" : (hymn.type == "mt" ? "M.T." : "Hymn"))
+                        .font(.system(size: 11, weight: .bold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(theme.textPrimary.opacity(0.08))
+                        .cornerRadius(6)
+                        .foregroundColor(theme.textPrimary)
+                }
             }
             
-            if !hymn.signature.isEmpty {
+            if !compact, !hymn.signature.isEmpty {
                 HStack(spacing: 12) {
                     HStack(spacing: 4) {
                         Image(hymn.type == "keerthane" ? "keerthane" : "hymn")
@@ -755,11 +734,11 @@ public struct HymnDetailView: View {
                 .padding(.top, 4)
             }
         }
-        .padding(16)
+        .padding(compact ? 12 : 16)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: compact ? 12 : 16)
                 .fill(theme.surfaceColor)
-                .overlay(RoundedRectangle(cornerRadius: 16).stroke(theme.strokeColor, lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: compact ? 12 : 16).stroke(theme.strokeColor, lineWidth: 1))
         )
         .padding(.horizontal)
     }
@@ -782,29 +761,68 @@ public struct HymnDetailView: View {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
         
-        return ScrollView {
-            LazyVStack(spacing: 24) {
-                ForEach(0..<paragraphs.count, id: \.self) { idx in
-                    Text(paragraphs[idx])
-                        .font(.system(size: viewModel.fontSize, weight: .semibold))
-                        .lineSpacing(viewModel.fontSize * 0.35)
-                        .foregroundColor(theme.textPrimary)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity)
-                        .padding(.horizontal, 28)
+        return ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 24) {
+                    Color.clear
+                        .frame(height: 1)
+                        .id("lyrics_top")
+                        .background(
+                            GeometryReader { geo in
+                                Color.clear.preference(
+                                    key: LyricsScrollOffsetKey.self,
+                                    value: Double(-geo.frame(in: .named("lyricsScroll")).minY)
+                                )
+                            }
+                        )
+                    
+                    ForEach(0..<paragraphs.count, id: \.self) { idx in
+                        Text(paragraphs[idx])
+                            .font(.system(size: viewModel.fontSize, weight: .semibold))
+                            .lineSpacing(viewModel.fontSize * 0.35)
+                            .foregroundColor(theme.textPrimary)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, 28)
+                            .id("verse_\(idx)")
+                    }
                 }
+                .padding(.vertical, 20)
             }
-            .padding(.vertical, 20)
+            .coordinateSpace(name: "lyricsScroll")
+            .onPreferenceChange(LyricsScrollOffsetKey.self) { value in
+                scrollOffset = max(0, value)
+            }
+            .onAppear {
+                restoreScrollIfNeeded(proxy: proxy, verseCount: paragraphs.count)
+            }
+            .onChange(of: viewModel.selectedLanguage) { _, _ in
+                restoreScrollIfNeeded(proxy: proxy, verseCount: paragraphs.count)
+            }
+        }
+    }
+    
+    private func restoreScrollIfNeeded(proxy: ScrollViewProxy, verseCount: Int) {
+        guard let offset = pendingScrollRestore, offset > 20 else { return }
+        pendingScrollRestore = nil
+        // Approximate restore by verse index derived from prior offset.
+        let estimatedVerse = min(max(Int(offset / 120.0), 0), max(verseCount - 1, 0))
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            withAnimation(.easeOut(duration: 0.25)) {
+                proxy.scrollTo("verse_\(estimatedVerse)", anchor: .top)
+            }
         }
     }
     
     private func glassmorphicAudioPlayer(isEmbedded: Bool) -> some View {
-        let player = VStack(spacing: 12) {
-            // Progression Track bar & timings
-            HStack {
+        let player = VStack(spacing: 10) {
+            playerTopBar(title: hymn.title)
+            
+            HStack(spacing: 10) {
                 Text(formatTime(dragTime ?? audio.currentTime))
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .foregroundColor(theme.textSecondary)
+                    .frame(width: 40, alignment: .leading)
                 
                 Slider(
                     value: Binding(
@@ -821,114 +839,419 @@ public struct HymnDetailView: View {
                         }
                     }
                 )
-                .accentColor(theme.textPrimary)
+                .tint(theme.textPrimary)
                 
                 Text(formatTime(audio.duration))
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .foregroundColor(theme.textSecondary)
+                    .frame(width: 40, alignment: .trailing)
             }
-            .padding(.horizontal)
+            .padding(.horizontal, 4)
             
-            // Audio Controls Center
-            HStack(spacing: isEmbedded ? 14 : 32) {
-                // Loop button
-                Button {
-                    let impact = UIImpactFeedbackGenerator(style: .light)
-                    impact.impactOccurred()
-                    audio.isLooping.toggle()
-                } label: {
-                    Image(systemName: audio.isLooping ? "repeat.1" : "repeat")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(audio.isLooping ? .red : theme.textSecondary)
-                }
+            HStack(spacing: 10) {
+                playerSpeedControl(
+                    rate: Double(audio.playbackRate),
+                    minRate: 0.75,
+                    maxRate: 2.0,
+                    step: 0.25,
+                    onChange: { audio.playbackRate = Float($0) }
+                )
                 
-                // Backward 5s
-                Button {
-                    audio.skipBackward()
-                } label: {
-                    Image(systemName: "gobackward.5")
-                        .font(.system(size: 22))
-                        .foregroundColor(theme.textPrimary)
-                }
+                Spacer(minLength: 0)
                 
-                // Play / Pause
-                Button {
-                    audio.togglePlayback()
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(theme.textPrimary)
-                            .frame(width: 54, height: 54)
-                        
-                        if audio.isLoading {
-                            ProgressView()
-                                .tint(theme.backgroundColor)
-                        } else {
-                            Image(systemName: audio.isPlaying ? "pause.fill" : "play.fill")
-                                .font(.system(size: 22))
-                                .foregroundColor(theme.backgroundColor)
-                        }
+                playerTransportRow(
+                    isEmbedded: isEmbedded,
+                    isLooping: audio.isLooping,
+                    isLoading: audio.isLoading,
+                    isPlaying: audio.isPlaying,
+                    onLoop: { audio.isLooping.toggle() },
+                    onBack: { audio.skipBackward() },
+                    onPlayPause: { audio.togglePlayback() },
+                    onForward: { audio.skipForward() },
+                    trailing: { EmptyView() }
+                )
+            }
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 14)
+        .background(playerChrome(isEmbedded: isEmbedded))
+        
+        return Group {
+            if isEmbedded {
+                player
+            } else {
+                player.ignoresSafeArea(edges: .bottom)
+            }
+        }
+    }
+    
+    private func glassmorphicMidiPlayer(isEmbedded: Bool) -> some View {
+        let player = VStack(spacing: 10) {
+            if let audioErrorMessage {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                    Text(audioErrorMessage)
+                        .font(.system(size: 12, weight: .medium))
+                    Spacer()
+                    Button("Contribute") {
+                        showAudioContribution = true
                     }
+                    .font(.system(size: 12, weight: .bold))
                 }
-                
-                // Forward 5s
-                Button {
-                    audio.skipForward()
-                } label: {
-                    Image(systemName: "goforward.5")
-                        .font(.system(size: 22))
-                        .foregroundColor(theme.textPrimary)
-                }
-                
-                // Speed Controller
+                .foregroundColor(.orange)
+                .padding(10)
+                .background(Color.orange.opacity(0.12))
+                .cornerRadius(10)
+            }
+            
+            playerTopBar(title: selectedTuneDisplayName.isEmpty ? hymn.title : selectedTuneDisplayName)
+            
+            if tuneOptions.count > 1 {
                 Menu {
-                    ForEach([0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { rate in
+                    ForEach(Array(tuneOptions.enumerated()), id: \.element) { index, tune in
                         Button {
-                            audio.playbackRate = Float(rate)
+                            if selectedTune != tune {
+                                selectedTune = tune
+                                let streamUrl = SongAudioURL.streamURL(for: hymn, selectedTune: tune, midiFiles: midiFilesList)
+                                Task {
+                                    midiAudio.stop()
+                                    do {
+                                        try await midiAudio.loadAndPlay(urlString: streamUrl)
+                                        audioErrorMessage = nil
+                                    } catch {
+                                        if SongAudioURL.shouldAllowOggFallback(for: hymn) {
+                                            audio.loadAndPlay(
+                                                urlString: SongAudioURL.oggFallbackURL(for: hymn),
+                                                title: "Hymn \(hymn.number)",
+                                                subtitle: hymn.title
+                                            )
+                                        } else {
+                                            audioErrorMessage = error.localizedDescription
+                                        }
+                                    }
+                                }
+                            }
                         } label: {
                             HStack {
-                                Text("\(String(format: "%.2fx", rate))")
-                                if abs(audio.playbackRate - Float(rate)) < 0.05 {
+                                Text(tuneDisplayName(for: tune, index: index))
+                                if selectedTune == tune {
                                     Image(systemName: "checkmark")
                                 }
                             }
                         }
                     }
                 } label: {
-                    Text(String(format: "%.1fx", audio.playbackRate))
-                        .font(.system(size: 13, weight: .bold, design: .monospaced))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(theme.surfaceColor))
-                        .foregroundColor(theme.textPrimary)
+                    HStack(spacing: 6) {
+                        Text("Tune")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(theme.textSecondary)
+                        Text(selectedTuneDisplayName)
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(theme.textPrimary)
+                            .lineLimit(1)
+                        Spacer()
+                        Text("\(tuneOptions.count)")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(theme.textSecondary)
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(theme.textSecondary)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(theme.surfaceColor.opacity(0.85))
+                    .cornerRadius(10)
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(theme.strokeColor, lineWidth: 1))
                 }
             }
-        }
-        .padding(.vertical, 16)
-        .padding(.horizontal, 12)
-        .background(
-            Group {
-                if isEmbedded {
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(theme.cardBackground)
-                } else {
-                    RoundedRectangle(cornerRadius: 0)
-                        .fill(.ultraThinMaterial)
-                }
+            
+            HStack(spacing: 10) {
+                Text(formatTime(dragTime ?? midiAudio.currentTime))
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundColor(theme.textSecondary)
+                    .frame(width: 40, alignment: .leading)
+                
+                Slider(
+                    value: Binding(
+                        get: { dragTime ?? midiAudio.currentTime },
+                        set: { dragTime = $0 }
+                    ),
+                    in: 0...max(1, midiAudio.duration),
+                    onEditingChanged: { editing in
+                        HapticsManager.shared.triggerSelection()
+                        if !editing {
+                            if let targetTime = dragTime {
+                                midiAudio.seek(to: targetTime)
+                            }
+                            dragTime = nil
+                        }
+                    }
+                )
+                .tint(theme.textPrimary)
+                
+                Text(formatTime(midiAudio.duration))
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundColor(theme.textSecondary)
+                    .frame(width: 40, alignment: .trailing)
             }
-            .overlay(
-                RoundedRectangle(cornerRadius: isEmbedded ? 16 : 0)
-                    .stroke(theme.strokeColor, lineWidth: 1)
+            .padding(.horizontal, 4)
+            
+            HStack(spacing: 8) {
+                playerSpeedControl(
+                    rate: Double(midiAudio.playbackRate),
+                    minRate: 0.5,
+                    maxRate: 1.5,
+                    step: 0.05,
+                    onChange: { midiAudio.playbackRate = Float($0) }
+                )
+                
+                playerTransposeControl
+                
+                Spacer(minLength: 0)
+                
+                Button {
+                    isShowingAdvancedMidi = true
+                } label: {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(theme.textSecondary)
+                        .padding(8)
+                        .background(theme.surfaceColor.opacity(0.85))
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(theme.strokeColor, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+            }
+            
+            playerTransportRow(
+                isEmbedded: isEmbedded,
+                isLooping: midiAudio.isLooping,
+                isLoading: midiAudio.isLoading,
+                isPlaying: midiAudio.isPlaying,
+                onLoop: {
+                    HapticsManager.shared.triggerLight()
+                    midiAudio.isLooping.toggle()
+                },
+                onBack: { midiAudio.skipBackward() },
+                onPlayPause: { midiAudio.togglePlayback() },
+                onForward: { midiAudio.skipForward() },
+                trailing: { EmptyView() }
             )
-        )
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 14)
+        .background(playerChrome(isEmbedded: isEmbedded))
+        .sheet(isPresented: $isShowingAdvancedMidi) {
+            AdvancedMidiSettingsView()
+        }
         
         return Group {
             if isEmbedded {
                 player
             } else {
-                player.ignoresSafeArea()
+                player.ignoresSafeArea(edges: .bottom)
             }
         }
+    }
+    
+    private func playerTopBar(title: String) -> some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(hymn.type == "keerthane" ? "Keerthane \(hymn.number)" : (hymn.type == "mt" ? "M.T. \(hymn.number)" : "Hymn \(hymn.number)"))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(theme.textSecondary)
+                Text(title)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(theme.textPrimary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            Button(action: closeAudioPlayer) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(theme.textPrimary)
+                    .frame(width: 30, height: 30)
+                    .background(theme.surfaceColor.opacity(0.9))
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(theme.strokeColor, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close player")
+        }
+    }
+    
+    private func playerSpeedControl(
+        rate: Double,
+        minRate: Double,
+        maxRate: Double,
+        step: Double,
+        onChange: @escaping (Double) -> Void
+    ) -> some View {
+        HStack(spacing: 6) {
+            Text("Speed")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(theme.textSecondary)
+            
+            Button {
+                let next = max(minRate, (rate - step))
+                onChange((next * 100).rounded() / 100)
+                HapticsManager.shared.triggerSelection()
+            } label: {
+                Image(systemName: "minus")
+                    .font(.system(size: 11, weight: .bold))
+                    .frame(width: 24, height: 24)
+            }
+            .disabled(rate <= minRate)
+            
+            Text(String(format: "%.2fx", rate))
+                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .foregroundColor(theme.textPrimary)
+                .frame(minWidth: 44)
+            
+            Button {
+                let next = min(maxRate, (rate + step))
+                onChange((next * 100).rounded() / 100)
+                HapticsManager.shared.triggerSelection()
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 11, weight: .bold))
+                    .frame(width: 24, height: 24)
+            }
+            .disabled(rate >= maxRate)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(theme.surfaceColor.opacity(0.85))
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(theme.strokeColor, lineWidth: 1))
+        .foregroundColor(theme.textPrimary)
+    }
+    
+    private var playerTransposeControl: some View {
+        HStack(spacing: 6) {
+            Text("Key")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(theme.textSecondary)
+            
+            Button {
+                midiAudio.transpose = max(-12, midiAudio.transpose - 1)
+                HapticsManager.shared.triggerSelection()
+            } label: {
+                Image(systemName: "minus")
+                    .font(.system(size: 11, weight: .bold))
+                    .frame(width: 24, height: 24)
+            }
+            .disabled(midiAudio.transpose <= -12)
+            
+            Text(midiAudio.transpose == 0 ? "0" : String(format: "%+d", midiAudio.transpose))
+                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .foregroundColor(theme.textPrimary)
+                .frame(minWidth: 28)
+            
+            Button {
+                midiAudio.transpose = min(12, midiAudio.transpose + 1)
+                HapticsManager.shared.triggerSelection()
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 11, weight: .bold))
+                    .frame(width: 24, height: 24)
+            }
+            .disabled(midiAudio.transpose >= 12)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(theme.surfaceColor.opacity(0.85))
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(theme.strokeColor, lineWidth: 1))
+        .foregroundColor(theme.textPrimary)
+    }
+    
+    private func playerTransportRow<Trailing: View>(
+        isEmbedded: Bool,
+        isLooping: Bool,
+        isLoading: Bool,
+        isPlaying: Bool,
+        onLoop: @escaping () -> Void,
+        onBack: @escaping () -> Void,
+        onPlayPause: @escaping () -> Void,
+        onForward: @escaping () -> Void,
+        @ViewBuilder trailing: () -> Trailing
+    ) -> some View {
+        HStack(spacing: isEmbedded ? 14 : 22) {
+            Button(action: onLoop) {
+                Image(systemName: isLooping ? "repeat.1" : "repeat")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(isLooping ? .red : theme.textSecondary)
+            }
+            
+            Button(action: onBack) {
+                Image(systemName: "gobackward.5")
+                    .font(.system(size: 20))
+                    .foregroundColor(theme.textPrimary)
+            }
+            
+            Button(action: onPlayPause) {
+                ZStack {
+                    Circle()
+                        .fill(theme.textPrimary)
+                        .frame(width: 50, height: 50)
+                    
+                    if isLoading {
+                        ProgressView()
+                            .tint(theme.backgroundColor)
+                    } else {
+                        Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundColor(theme.backgroundColor)
+                            .offset(x: isPlaying ? 0 : 1)
+                    }
+                }
+            }
+            
+            Button(action: onForward) {
+                Image(systemName: "goforward.5")
+                    .font(.system(size: 20))
+                    .foregroundColor(theme.textPrimary)
+            }
+            
+            trailing()
+        }
+        .frame(maxWidth: .infinity)
+    }
+    
+    private func playerChrome(isEmbedded: Bool) -> some View {
+        Group {
+            if isEmbedded {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(theme.cardBackground)
+            } else {
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 18,
+                    bottomLeadingRadius: 0,
+                    bottomTrailingRadius: 0,
+                    topTrailingRadius: 18,
+                    style: .continuous
+                )
+                .fill(.ultraThinMaterial)
+            }
+        }
+        .overlay(
+            Group {
+                if isEmbedded {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(theme.strokeColor, lineWidth: 1)
+                } else {
+                    UnevenRoundedRectangle(
+                        topLeadingRadius: 18,
+                        bottomLeadingRadius: 0,
+                        bottomTrailingRadius: 0,
+                        topTrailingRadius: 18,
+                        style: .continuous
+                    )
+                    .stroke(theme.strokeColor, lineWidth: 1)
+                }
+            }
+        )
     }
     
     private var reportLyricsSheet: some View {
@@ -958,202 +1281,104 @@ public struct HymnDetailView: View {
             }
         }
     }
-    
-    private func glassmorphicMidiPlayer(isEmbedded: Bool) -> some View {
-        let player = VStack(spacing: 12) {
-            if tuneOptions.count > 1 {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(tuneOptions, id: \.self) { tune in
-                            Button {
-                                if selectedTune != tune {
-                                    selectedTune = tune
-                                    let streamUrl = SongAudioURL.streamURL(for: hymn, selectedTune: tune)
-                                    Task {
-                                        midiAudio.stop()
-                                        await midiAudio.loadAndPlay(urlString: streamUrl)
-                                    }
-                                }
-                            } label: {
-                                Text(tune.uppercased())
-                                    .font(.system(size: 13, weight: selectedTune == tune ? .bold : .medium))
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 8)
-                                    .background(selectedTune == tune ? theme.textPrimary : Color.clear)
-                                    .foregroundColor(selectedTune == tune ? theme.backgroundColor : theme.textPrimary)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 16)
-                                            .stroke(theme.textPrimary, lineWidth: 1)
-                                    )
-                                    .cornerRadius(16)
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                }
-            }
-            
-            // Progress Bar
-            HStack(spacing: 12) {
-                Text(formatTime(midiAudio.currentTime))
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(theme.textSecondary)
-                
-                Slider(
-                    value: Binding(
-                        get: { dragTime ?? midiAudio.currentTime },
-                        set: { dragTime = $0 }
-                    ),
-                    in: 0...max(1, midiAudio.duration),
-                    onEditingChanged: { editing in
-                        HapticsManager.shared.triggerSelection()
-                        if !editing {
-                            if let targetTime = dragTime {
-                                midiAudio.seek(to: targetTime)
-                            }
-                            dragTime = nil
-                        }
-                    }
-                )
-                .accentColor(theme.textPrimary)
-                
-                Text(formatTime(midiAudio.duration))
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(theme.textSecondary)
-            }
-            .padding(.horizontal)
-            
-            // Audio Controls Center
-            HStack(spacing: isEmbedded ? 12 : 32) {
-                // Loop button
-                Button {
-                    HapticsManager.shared.triggerLight()
-                    midiAudio.isLooping.toggle()
-                } label: {
-                    Image(systemName: midiAudio.isLooping ? "repeat.1" : "repeat")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(midiAudio.isLooping ? .red : theme.textSecondary)
-                }
-                
-                // Backward 5s
-                Button {
-                    midiAudio.skipBackward()
-                } label: {
-                    Image(systemName: "gobackward.5")
-                        .font(.system(size: 22))
-                        .foregroundColor(theme.textPrimary)
-                }
-                .buttonStyle(.hapticLight)
-                
-                // Play / Pause
-                Button {
-                    midiAudio.togglePlayback()
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(theme.textPrimary)
-                            .frame(width: 54, height: 54)
-                        
-                        if midiAudio.isLoading {
-                            ProgressView()
-                                .tint(theme.backgroundColor)
-                        } else {
-                            Image(systemName: midiAudio.isPlaying ? "pause.fill" : "play.fill")
-                                .font(.system(size: 22))
-                                .foregroundColor(theme.backgroundColor)
-                        }
-                    }
-                }
-                .buttonStyle(.hapticMedium)
-                
-                // Forward 5s
-                Button {
-                    midiAudio.skipForward()
-                } label: {
-                    Image(systemName: "goforward.5")
-                        .font(.system(size: 22))
-                        .foregroundColor(theme.textPrimary)
-                }
-                .buttonStyle(.hapticLight)
-                
-                // Speed Controller
-                Menu {
-                    ForEach([0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { rate in
-                        Button {
-                            HapticsManager.shared.triggerSelection()
-                            midiAudio.playbackRate = Float(rate)
-                        } label: {
-                            HStack {
-                                Text("\(String(format: "%.2fx", rate))")
-                                if abs(midiAudio.playbackRate - Float(rate)) < 0.05 {
-                                    Image(systemName: "checkmark")
-                                }
-                            }
-                        }
-                    }
-                } label: {
-                    Text("\(String(format: "%.2fx", midiAudio.playbackRate))")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(theme.textSecondary)
-                        .frame(width: 44)
-                }
-            }
-            
-            // Advanced Audio Options
-            Button {
-                HapticsManager.shared.triggerSelection()
-                isShowingAdvancedMidi = true
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.system(size: 13, weight: .semibold))
-                    Text("Advanced Audio Options")
-                        .font(.system(size: 13, weight: .semibold))
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(theme.surfaceColor)
-                .cornerRadius(10)
-                .foregroundColor(theme.textPrimary)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(theme.strokeColor, lineWidth: 1)
-                )
-            }
-            .buttonStyle(.hapticMedium)
-            .padding(.top, 4)
-        }
-        .padding(.vertical, 16)
-        .padding(.horizontal, 12)
-        .background(
-            Group {
-                if isEmbedded {
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(theme.cardBackground)
-                } else {
-                    RoundedRectangle(cornerRadius: 0)
-                        .fill(.ultraThinMaterial)
-                }
-            }
-            .overlay(
-                RoundedRectangle(cornerRadius: isEmbedded ? 16 : 0)
-                    .stroke(theme.strokeColor, lineWidth: 1)
-            )
-        )
-        .sheet(isPresented: $isShowingAdvancedMidi) {
-            AdvancedMidiSettingsView()
-        }
-        
-        return Group {
-            if isEmbedded {
-                player
-            } else {
-                player.ignoresSafeArea()
-            }
-        }
-    }
 
     // MARK: - Helpers
+    private var usesMidiPlayback: Bool {
+        if forceOggPlayer { return false }
+        return hymn.type == "mt" || SongAudioURL.isMidiFileURL(SongAudioURL.streamURL(for: hymn, selectedTune: selectedTune, midiFiles: midiFilesList))
+    }
+    
+    /// Android `TUNE_METER_VIEW`: only admins with this role (or sudo/super admin) see real meter names.
+    private var canViewTuneMeters: Bool {
+        AdminPrefs.hasRole(
+            currentUserEmail: SupabaseService.instance.currentUserEmail,
+            adminEmailsConfig: AppConfigService.shared.config.adminEmails,
+            requiredRole: .tuneMeterView
+        )
+    }
+    
+    private var selectedTuneDisplayName: String {
+        let tune = selectedTune ?? tuneOptions.first ?? ""
+        let index = tuneOptions.firstIndex(of: tune) ?? 0
+        return tuneDisplayName(for: tune, index: index)
+    }
+    
+    private func tuneDisplayName(for tune: String, index: Int) -> String {
+        if hymn.type == "keerthane" || hymn.type == "mt" {
+            if tune == "\(hymn.number)" { return "Default" }
+            return tune
+        }
+        if canViewTuneMeters {
+            return MeterUtils.displayTuneName(tune)
+        }
+        return "Version \(index + 1)"
+    }
+    
+    private func startAudioPlayback() {
+        audioErrorMessage = nil
+        forceOggPlayer = false
+        let streamUrl = SongAudioURL.streamURL(for: hymn, selectedTune: selectedTune, midiFiles: midiFilesList)
+        // Android: collapse controls when playback starts.
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            isHidden = true
+        }
+        
+        if SongAudioURL.isMidiFileURL(streamUrl) || hymn.type == "mt" {
+            Task {
+                do {
+                    try await midiAudio.loadAndPlay(urlString: streamUrl)
+                } catch let error as MidiDownloadError where error == .notFound {
+                    await fallbackToOgg(orShow: error.localizedDescription)
+                } catch {
+                    if isNotFound(error) {
+                        await fallbackToOgg(orShow: error.localizedDescription)
+                    } else {
+                        audioErrorMessage = error.localizedDescription
+                    }
+                }
+            }
+        } else {
+            forceOggPlayer = true
+            audio.loadAndPlay(
+                urlString: streamUrl,
+                title: "\(hymn.type == "keerthane" ? "Keerthane" : "Hymn") \(hymn.number)",
+                subtitle: hymn.title
+            )
+        }
+    }
+    
+    @MainActor
+    private func fallbackToOgg(orShow message: String) async {
+        if SongAudioURL.shouldAllowOggFallback(for: hymn) {
+            forceOggPlayer = true
+            midiAudio.stop()
+            audio.loadAndPlay(
+                urlString: SongAudioURL.oggFallbackURL(for: hymn),
+                title: "\(hymn.type == "keerthane" ? "Keerthane" : "Hymn") \(hymn.number)",
+                subtitle: hymn.title
+            )
+            // If OGG also fails quickly, user can still tap Contribute from the error banner.
+        } else {
+            audioErrorMessage = message
+            showAudioContribution = true
+        }
+    }
+    
+    private func isNotFound(_ error: Error) -> Bool {
+        if let midiError = error as? MidiDownloadError {
+            if case .notFound = midiError { return true }
+        }
+        return error.localizedDescription.lowercased().contains("404")
+            || error.localizedDescription.lowercased().contains("not found")
+    }
+    
+    private func stopAudioPlayback() {
+        if usesMidiPlayback || midiAudio.currentURL != nil {
+            midiAudio.stop()
+        }
+        audio.pause()
+    }
+    
     private func formatTime(_ seconds: Double) -> String {
         guard !seconds.isNaN else { return "00:00" }
         let minutes = Int(seconds) / 60
@@ -1167,39 +1392,26 @@ struct AdvancedMidiSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     
     @State private var engine = MidiPlaybackEngine.shared
-    @State private var globalInstrumentId: Int = UserDefaults.standard.integer(forKey: "midiInstrumentId")
+    @State private var globalInstrumentId: Int = MidiInstruments.currentProgramId
     
-    let instrumentOptions: [(name: String, gmId: UInt8, id: Int)] = [
-        ("Reed Organ", 20, 0),
-        ("Grand Piano", 0, 1),
-        ("Pipe Organ", 19, 2),
-        ("Choir Aahs", 52, 3)
-    ]
+    let instrumentOptions = MidiInstruments.all
     
     var body: some View {
         NavigationView {
             Form {
                 Section(header: Text("Global Settings")) {
                     Picker("Instrument", selection: $globalInstrumentId) {
-                        ForEach(instrumentOptions, id: \.id) { option in
-                            Text(option.name).tag(option.id)
+                        ForEach(instrumentOptions, id: \.program) { option in
+                            Text(option.name).tag(option.program)
                         }
                     }
-                    .onChange(of: globalInstrumentId) { newValue in
+                    .onChange(of: globalInstrumentId) { _, newValue in
                         HapticsManager.shared.triggerSelection()
                         engine.updateGlobalInstrument(to: newValue)
                     }
-                    
-                    Stepper("Transpose: \(engine.transpose > 0 ? "+" : "")\(engine.transpose)", value: Binding(
-                        get: { engine.transpose },
-                        set: {
-                            HapticsManager.shared.triggerSelection()
-                            engine.transpose = $0
-                        }
-                    ), in: -12...12)
                 }
                 
-                Section(header: Text("Track Routing (SATB)"), footer: Text("Allows assigning different instruments to individual parts. Assuming Track 1 = Soprano, Track 2 = Alto, Track 3 = Tenor, Track 4 = Bass.")) {
+                Section(header: Text("Track Routing (SATB)"), footer: Text("Mute or assign instruments per part. Track 1 = Soprano, 2 = Alto, 3 = Tenor, 4 = Bass. Speed and transpose are on the main player.")) {
                     Toggle("Enable Advanced Routing", isOn: Binding(
                         get: { engine.isAdvancedMode },
                         set: {
@@ -1210,6 +1422,14 @@ struct AdvancedMidiSettingsView: View {
                     
                     if engine.isAdvancedMode {
                         ForEach(0..<4, id: \.self) { index in
+                            Toggle("Mute \(partName(for: index))", isOn: Binding(
+                                get: { engine.satbMuted[index] },
+                                set: { newValue in
+                                    HapticsManager.shared.triggerSelection()
+                                    engine.satbMuted[index] = newValue
+                                }
+                            ))
+                            
                             Picker(partName(for: index), selection: Binding(
                                 get: { engine.satbInstruments[index] },
                                 set: { newValue in
@@ -1217,10 +1437,11 @@ struct AdvancedMidiSettingsView: View {
                                     engine.satbInstruments[index] = newValue
                                 }
                             )) {
-                                ForEach(instrumentOptions, id: \.gmId) { option in
-                                    Text(option.name).tag(option.gmId)
+                                ForEach(instrumentOptions, id: \.program) { option in
+                                    Text(option.name).tag(UInt8(option.program))
                                 }
                             }
+                            .disabled(engine.satbMuted[index])
                         }
                     }
                 }
@@ -1246,5 +1467,19 @@ struct AdvancedMidiSettingsView: View {
         case 3: return "Bass (Track 4)"
         default: return "Track \(index + 1)"
         }
+    }
+}
+
+private struct LyricsScrollOffsetKey: PreferenceKey {
+    static var defaultValue: Double = 0
+    static func reduce(value: inout Double, nextValue: () -> Double) {
+        value = nextValue()
+    }
+}
+
+private extension Float {
+    func rounded(toPlaces places: Int) -> Float {
+        let divisor = pow(10.0, Float(places))
+        return (self * divisor).rounded() / divisor
     }
 }

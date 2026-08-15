@@ -53,18 +53,13 @@ public actor JiraService {
     }
     
     /// Submits a new support task ticket to Jira Cloud REST APIs.
-    /// - Parameters:
-    ///   - songType: "Hymn" or "Keerthane"
-    ///   - songNumber: Index sequence number
-    ///   - songTitle: Label header
-    ///   - description: Optional user review explanation
-    ///   - appVersion: Current native build bundle
     public func createTicket(
         songType: String,
         songNumber: Int,
         songTitle: String,
         description: String?,
-        appVersion: String
+        appVersion: String,
+        isAudioContribution: Bool = false
     ) async -> TicketResult {
         let authString = "\(email):\(apiToken)"
         guard let authData = authString.data(using: .utf8) else {
@@ -79,16 +74,29 @@ public actor JiraService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         
-        // Assemble Atlassian Document Format (ADF) description body
-        let summary = "Lyric Issue: \(songType) \(songNumber) - \(songTitle)"
-        let descNode = buildDescriptionNode(songType: songType, number: songNumber, details: description, version: appVersion)
+        let summary = isAudioContribution
+            ? "\(songType) \(songNumber) Audio Contribution"
+            : "Lyric Issue: \(songType) \(songNumber) - \(songTitle)"
+        let descNode = buildDescriptionNode(
+            songType: songType,
+            number: songNumber,
+            title: songTitle,
+            details: description,
+            version: appVersion,
+            isAudioContribution: isAudioContribution
+        )
+        
+        let labels = isAudioContribution
+            ? ["audio-contribution", "app-reported", "ios-app"]
+            : ["lyrics-issue", "app-reported", "ios-app"]
         
         let payload: [String: Any] = [
             "fields": [
                 "project": ["key": projectKey],
                 "summary": summary,
                 "description": descNode,
-                "issuetype": ["name": issueTypeName]
+                "issuetype": ["name": issueTypeName],
+                "labels": labels
             ]
         ]
         
@@ -107,7 +115,6 @@ public actor JiraService {
                    let selfUrl = responseJson["self"] as? String {
                     let ticketUrl = selfUrl.replacingOccurrences(of: "/rest/api/3/issue/", with: "/browse/")
                     
-                    // Sync this created ticket metadata to Supabase log database
                     try? await syncTicketToSupabase(key: ticketKey, url: ticketUrl, songType: songType, number: songNumber, title: songTitle, desc: description, version: appVersion)
                     
                     return TicketResult(success: true, ticketKey: ticketKey, ticketUrl: ticketUrl)
@@ -121,15 +128,58 @@ public actor JiraService {
         }
     }
     
+    /// Uploads a file attachment to an existing Jira issue (audio contribution).
+    public func uploadAttachment(ticketKey: String, fileData: Data, fileName: String) async -> Bool {
+        let authString = "\(email):\(apiToken)"
+        guard let authData = authString.data(using: .utf8) else { return false }
+        let base64Auth = authData.base64EncodedString()
+        
+        guard let url = URL(string: "\(jiraURLString)/rest/api/3/issue/\(ticketKey)/attachments") else {
+            return false
+        }
+        
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Basic \(base64Auth)", forHTTPHeaderField: "Authorization")
+        request.setValue("no-check", forHTTPHeaderField: "X-Atlassian-Token")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        
+        var body = Data()
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: application/octet-stream\r\n\r\n".data(using: .utf8)!)
+        body.append(fileData)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        request.httpBody = body
+        
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+            return code == 200 || code == 201
+        } catch {
+            print("JiraService: uploadAttachment failed for \(ticketKey): \(error)")
+            return false
+        }
+    }
+    
     // MARK: - Helpers
     
-    private func buildDescriptionNode(songType: String, number: Int, details: String?, version: String) -> [String: Any] {
+    private func buildDescriptionNode(
+        songType: String,
+        number: Int,
+        title: String,
+        details: String?,
+        version: String,
+        isAudioContribution: Bool
+    ) -> [String: Any] {
         var content: [[String: Any]] = [
             [
                 "type": "paragraph",
                 "content": [
-                    ["type": "text", "text": "An issue was reported for "],
-                    ["type": "text", "text": "\(songType) \(number)", "marks": [["type": "strong"]]],
+                    ["type": "text", "text": isAudioContribution ? "Audio contribution for " : "An issue was reported for "],
+                    ["type": "text", "text": "\(songType) \(number) — \(title)", "marks": [["type": "strong"]]],
                     ["type": "text", "text": "."]
                 ]
             ],
@@ -138,6 +188,13 @@ public actor JiraService {
                 "content": [
                     ["type": "text", "text": "App Version: ", "marks": [["type": "strong"]]],
                     ["type": "text", "text": version]
+                ]
+            ],
+            [
+                "type": "paragraph",
+                "content": [
+                    ["type": "text", "text": "Reported via: ", "marks": [["type": "strong"]]],
+                    ["type": "text", "text": "CSI Hymns App iOS"]
                 ]
             ]
         ]

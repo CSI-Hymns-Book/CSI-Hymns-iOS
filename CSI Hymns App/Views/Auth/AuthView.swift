@@ -273,7 +273,7 @@ public struct AuthView: View {
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.white)
                 
-                Link(destination: URL(string: "https://sites.google.com/view/csi-hymns-privacy-policy/home")!) {
+                NavigationLink(destination: PrivacyPolicyView()) {
                     Text("Read Privacy Policy")
                         .font(.system(size: 12))
                         .foregroundColor(.blue)
