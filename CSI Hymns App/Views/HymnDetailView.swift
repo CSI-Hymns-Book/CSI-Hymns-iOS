@@ -77,7 +77,12 @@ public struct HymnDetailView: View {
     let hymn: Hymn
     @State private var pageFlipVisibility = PageFlipVisibilityService.shared
     @AppStorage("use_page_swipe_physics") private var usePageSwipe = true
-    @AppStorage("isDetailControlsHidden") private var isHidden = false
+    /// Per-song only — never persisted across hymns.
+    @State private var isHidden = false
+    /// True after the user taps Hide/Show Actions on this hymn.
+    @State private var userTouchedActionVisibility = false
+    /// True when we auto-collapsed actions because audio started.
+    @State private var autoHidActionsForAudio = false
     @State private var theme = ThemeManager.shared
     @State private var viewModel = HymnDetailViewModel()
     @State private var audio = AudioService.shared
@@ -286,8 +291,7 @@ public struct HymnDetailView: View {
                 songTitle: hymn.title
             ) {
                 showAudioContribution = false
-                isAudioPlayerVisible = false
-                stopAudioPlayback()
+                closeAudioPlayer()
             }
             .presentationDetents([.medium, .large])
         }
@@ -334,6 +338,10 @@ public struct HymnDetailView: View {
             }
         }
         .task(id: hymn.id) {
+            isHidden = false
+            userTouchedActionVisibility = false
+            autoHidActionsForAudio = false
+            
             await MidiFileCatalog.shared.refresh()
             midiFilesList = MidiFileCatalog.shared.fileNames
             
@@ -457,6 +465,7 @@ public struct HymnDetailView: View {
     
     private var hideActionsChip: some View {
         Button {
+            userTouchedActionVisibility = true
             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                 isHidden.toggle()
             }
@@ -520,6 +529,7 @@ public struct HymnDetailView: View {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
             isAudioPlayerVisible = false
+            restoreActionsAfterAudioDismiss()
         }
         stopAudioPlayback()
         PostHogService.shared.track(event: "audio_playback_dismissed", properties: [
@@ -527,6 +537,20 @@ public struct HymnDetailView: View {
             "song_number": hymn.number,
             "song_type": hymn.type
         ])
+    }
+    
+    /// Restore lyric actions when the player closes, unless the user already showed them.
+    /// Manual Hide while the player is open still restores on dismiss.
+    private func restoreActionsAfterAudioDismiss() {
+        let userAlreadyShowing = userTouchedActionVisibility && !isHidden
+        if userAlreadyShowing {
+            autoHidActionsForAudio = false
+            return
+        }
+        if autoHidActionsForAudio || userTouchedActionVisibility {
+            isHidden = false
+        }
+        autoHidActionsForAudio = false
     }
     
     @ViewBuilder
@@ -1318,9 +1342,12 @@ public struct HymnDetailView: View {
         audioErrorMessage = nil
         forceOggPlayer = false
         let streamUrl = SongAudioURL.streamURL(for: hymn, selectedTune: selectedTune, midiFiles: midiFilesList)
-        // Android: collapse controls when playback starts.
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-            isHidden = true
+        // Collapse lyric actions for playback unless the user already hid them.
+        if !isHidden {
+            autoHidActionsForAudio = true
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                isHidden = true
+            }
         }
         
         if SongAudioURL.isMidiFileURL(streamUrl) || hymn.type == "mt" {
