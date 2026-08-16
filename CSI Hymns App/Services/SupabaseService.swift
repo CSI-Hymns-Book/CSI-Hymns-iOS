@@ -696,12 +696,14 @@ public final class SupabaseService {
         }
     }
     
-    /// Splits a native song key ("hymn_5" / "keerthane_3") into its numeric id and type.
+    /// Splits a native song key ("hymn_5" / "keerthane_3" / "mt_12") into its numeric id and type.
     static func parseSongKey(_ key: String) -> (id: Int, type: String)? {
         if key.hasPrefix("hymn_"), let n = Int(key.dropFirst("hymn_".count)) {
             return (n, "hymn")
         } else if key.hasPrefix("keerthane_"), let n = Int(key.dropFirst("keerthane_".count)) {
             return (n, "keerthane")
+        } else if key.hasPrefix("mt_"), let n = Int(key.dropFirst("mt_".count)) {
+            return (n, "mt")
         }
         return nil
     }

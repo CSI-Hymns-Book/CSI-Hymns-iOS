@@ -50,7 +50,7 @@ public struct CustomCategoryDesignerView: View {
     
     @State private var theme = ThemeManager.shared
     @State private var viewModel = CustomCategoryDesignerViewModel()
-    @State private var categoriesViewModel = CustomCategoriesViewModel()
+    @State private var categoriesViewModel = CustomCategoriesViewModel.shared
     
     public init(categoryId: String) {
         self.categoryId = categoryId
