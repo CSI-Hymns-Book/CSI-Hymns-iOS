@@ -160,8 +160,11 @@ public final class ConsentManager {
     
     public func syncPushConsentWithOsPermission() async {
         let granted = await hasOsNotificationPermission()
-        if granted != pushConsent {
-            setPushConsent(granted)
+        // System denial must clear consent. A still-granted OS permission must
+        // not override an explicit in-app opt-out — otherwise Privacy Centre
+        // cannot withdraw push (the toggle flips back on every refresh).
+        if !granted && pushConsent {
+            setPushConsent(false)
         }
     }
     

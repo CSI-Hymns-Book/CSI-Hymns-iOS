@@ -304,7 +304,12 @@ public struct HymnDetailView: View {
                 viewModel.fontSize = CGFloat(font)
             }
             pendingScrollRestore = progress.scrollOffset
-            let prefix = hymn.type.lowercased() == "keerthane" ? "keerthane_" : "hymn_"
+            let prefix: String
+            switch hymn.type.lowercased() {
+            case "keerthane": prefix = "keerthane_"
+            case "mt": prefix = "mt_"
+            default: prefix = "hymn_"
+            }
             RecentSongsService.shared.addRecentSong(prefix: prefix, number: hymn.number)
             PostHogService.shared.trackScreen("\(hymn.type.capitalized) Detail Screen")
             PostHogService.shared.track(event: "song_detail_opened", properties: [
