@@ -45,7 +45,7 @@ public enum LegalDocuments {
     • App preferences stored on device — to remember theme, instrument, and similar settings.
     • Support tickets and a random device ID — only if you report a lyric or audio issue, so we can track and reply.
     • Optional analytics (PostHog: app version, device model, iOS version, in-app events) — only if you opt in, to improve stability and features. Not required to use the hymn book.
-    • Optional push notifications (OneSignal: device push token) — only if you opt in, to send service messages. Not required to use the hymn book.
+    • Optional push notifications (Firebase Cloud Messaging: device push token) — only if you opt in, to send service messages. Not required to use the hymn book.
     
     You may withdraw consent at any time in Settings → Privacy Centre, with the same ease as giving it. Withdrawal of optional analytics or notifications does not block hymn reading. Withdrawal of account-related consent signs you out and stops cloud sync.
     
@@ -63,7 +63,7 @@ public enum LegalDocuments {
     • ಸಾಧನದಲ್ಲಿನ ಆದ್ಯತೆಗಳು — ಥೀಮ್ ಮತ್ತು ಸಂಗೀತ ಸೆಟ್ಟಿಂಗ್‌ಗಳಿಗಾಗಿ.
     • ಬೆಂಬಲ ಟಿಕೆಟ್ ಮತ್ತು ಯಾದೃಚ್ಛಿಕ ಸಾಧನ ಗುರುತು — ನೀವು ದೋಷ ವರದಿ ಮಾಡಿದಾಗ ಮಾತ್ರ.
     • ಐಚ್ಛಿಕ ವಿಶ್ಲೇಷಣೆ (PostHog) — ನೀವು ಒಪ್ಪಿದರೆ ಮಾತ್ರ. ಗೀತೆಗಳನ್ನು ಓದಲು ಅಗತ್ಯವಿಲ್ಲ.
-    • ಐಚ್ಛಿಕ ಪುಶ್ ಸೂಚನೆಗಳು (OneSignal) — ನೀವು ಒಪ್ಪಿದರೆ ಮಾತ್ರ.
+    • ಐಚ್ಛಿಕ ಪುಶ್ ಸೂಚನೆಗಳು (Firebase Cloud Messaging) — ನೀವು ಒಪ್ಪಿದರೆ ಮಾತ್ರ.
     
     ಸೆಟ್ಟಿಂಗ್‌ಗಳು → ಗೌಪ್ಯತಾ ಕೇಂದ್ರದಲ್ಲಿ ಯಾವಾಗ ಬೇಕಾದರೂ ಸಮ್ಮತಿಯನ್ನು ಹಿಂತೆಗೆದುಕೊಳ್ಳಬಹುದು. ನೀವು ಪ್ರವೇಶ, ತಿದ್ದುಪಡಿ, ಅಳಿಸುವಿಕೆ, ದೂರು ನಿವಾರಣೆ ಮತ್ತು ನಾಮನಿರ್ದೇಶನವನ್ನು \(ConsentManager.grievanceEmail) ಗೆ ಇಮೇಲ್ ಮಾಡಿ ಕೇಳಬಹುದು. ಭಾರತದ ದತ್ತಾಂಶ ಸಂರಕ್ಷಣಾ ಮಂಡಳಿಗೆ ದೂರು ಸಲ್ಲಿಸಬಹುದು.
     """
@@ -91,7 +91,7 @@ public enum LegalDocuments {
         
         Optional analytics (only with separate opt-in): app version, iOS version, device model, screen names, and in-app events (for example song opened). We do not sell this data.
         
-        Optional notifications (only with separate opt-in): a push token via OneSignal.
+        Optional notifications (only with separate opt-in): a push token via Firebase Cloud Messaging.
         
         Local-only: theme, page-turn preference, MIDI instrument, on-device playback history. These stay on your device unless you sign in and sync collections.
         
@@ -117,7 +117,7 @@ public enum LegalDocuments {
         We use service providers (Data Processors) only as needed:
         • Supabase (Auth and database, region ap-south-1, India) for accounts and sync.
         • PostHog for optional analytics.
-        • OneSignal for optional push notifications.
+        • Firebase Cloud Messaging for optional push notifications.
         • Apple and Google if you use their sign-in.
         • Atlassian Jira if you submit a support ticket.
         • GitHub for publicly hosted MIDI/lyric files (not your account profile).
@@ -205,7 +205,7 @@ public enum LegalDocuments {
         ಸಮ್ಮತಿ ಮುಂತಿಳಿಸದೆ ಗುರುತು ಹಾಕಲಾಗುವುದಿಲ್ಲ. ಪ್ರತಿ ಉದ್ದೇಶಕ್ಕೆ ಪ್ರತ್ಯೇಕ ಆಯ್ಕೆ. ಸೆಟ್ಟಿಂಗ್‌ಗಳು → ಗೌಪ್ಯತಾ ಕೇಂದ್ರದಲ್ಲಿ ಹಿಂತೆಗೆದುಕೊಳ್ಳಬಹುದು.
         """),
         LegalSection(id: "processors", heading: "೬. ಸಂಸ್ಕಾರಕರು", body: """
-        Supabase (ಭಾರತ), ಐಚ್ಛಿಕ PostHog ಮತ್ತು OneSignal, Apple/Google ಸೈನ್-ಇನ್, ಬೆಂಬಲಕ್ಕೆ Jira. ಚರ್ಚುಗಳಿಗೆ ನಿಮ್ಮ ಖಾತೆಯನ್ನು ಹಂಚುವುದಿಲ್ಲ.
+        Supabase (ಭಾರತ), ಐಚ್ಛಿಕ PostHog ಮತ್ತು Firebase Cloud Messaging, Apple/Google ಸೈನ್-ಇನ್, ಬೆಂಬಲಕ್ಕೆ Jira. ಚರ್ಚುಗಳಿಗೆ ನಿಮ್ಮ ಖಾತೆಯನ್ನು ಹಂಚುವುದಿಲ್ಲ.
         """),
         LegalSection(id: "transfer", heading: "೭. ಗಡಿ ದಾಟಿದ ಸಂಸ್ಕರಣೆ", body: """
         ಖಾತೆ ದತ್ತಾಂಶ ಭಾರತದಲ್ಲಿ (Mumbai) ಇರುತ್ತದೆ. ಕೆಲವು ಐಚ್ಛಿಕ ಸೇವೆಗಳು ಭಾರತದ ಹೊರಗೆ ಸಂಸ್ಕರಿಸಬಹುದು, DPDP ಅಧಿನಿಯಮದ ಅನುಮತಿಯಂತೆ.

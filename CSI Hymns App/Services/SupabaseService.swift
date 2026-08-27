@@ -551,6 +551,25 @@ public final class SupabaseService {
         }
         #endif
     }
+
+    /// Stores the device FCM token on the signed-in user profile row.
+    public func updateProfileFcmToken(_ token: String) async {
+        guard currentUser != nil, !token.isEmpty else { return }
+        #if canImport(Supabase)
+        guard let user = currentUser else { return }
+        struct FcmUpdate: Encodable {
+            let fcm_token: String
+        }
+        do {
+            try await client.from("users")
+                .update(FcmUpdate(fcm_token: token))
+                .eq("auth_uid", value: user.id.uuidString)
+                .execute()
+        } catch {
+            print("SupabaseService: updateProfileFcmToken failed: \(error)")
+        }
+        #endif
+    }
     
     /// Persists the DPDP consent artefact on the user profile row.
     public func syncConsentArtefact(

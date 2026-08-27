@@ -79,7 +79,7 @@ Native **SwiftUI** app for the Kannada CSI Hymns & Keerthane lyrics book. Built 
 - Optional tactile haptics, in-app changelog, and announcement dialogs
 - Force-update gate, in-app lyric/audio issue reporting via Jira, optional PostHog analytics
 - Optional Chromecast (remote-config gated; Google Cast SDK is not bundled via SPM)
-- Push notifications (OneSignal), with an in-app opt-out in Privacy Centre
+- Push notifications (Firebase Cloud Messaging), with an in-app opt-out in Privacy Centre
 - Optional **Support the Project** donations when enabled in remote config
 
 ---
@@ -119,7 +119,15 @@ cp "CSI Hymns App/Secrets.plist.template" "CSI Hymns App/Secrets.plist"
 | `JiraProjectKey` / `JiraIssueType` | Jira project and issue type (defaults: `CSI` / `Task`) |
 | `PostHogAPIKey` / `PostHogHost` | Analytics (optional) |
 
-### 3. Open in Xcode
+### 3. Firebase Cloud Messaging
+
+Push notifications use **Firebase Cloud Messaging** (same Firebase project as Android: `hymnappnoti`).
+
+1. In [Firebase Console](https://console.firebase.google.com/), open project **hymnappnoti** and add an **iOS app** with bundle ID `com.reyzie.hymns` if it is not registered yet.
+2. Download **GoogleService-Info.plist** and replace `CSI Hymns App/GoogleService-Info.plist` (the repo copy includes a placeholder `GOOGLE_APP_ID` until you do this).
+3. Upload your **APNs authentication key** (or certificate) under Project settings → Cloud Messaging so FCM can deliver to iOS devices.
+
+### 4. Open in Xcode
 
 ```bash
 open "CSI Hymns App.xcodeproj"
@@ -130,14 +138,14 @@ Select the **CSI Hymns App** scheme, pick a simulator or device, and run (**⌘R
 Swift Package Manager resolves dependencies automatically:
 
 - [supabase-swift](https://github.com/supabase-community/supabase-swift) 2.5.1+
-- [OneSignal-iOS-SDK](https://github.com/OneSignal/OneSignal-iOS-SDK) 5.x
+- [firebase-ios-sdk](https://github.com/firebase/firebase-ios-sdk) 11.x (FirebaseCore, FirebaseMessaging)
 
-### 4. Capabilities
+### 5. Capabilities
 
 The project expects these entitlements (already configured in Xcode):
 
 - **Sign in with Apple**
-- Push notifications (OneSignal)
+- Push notifications (Firebase Cloud Messaging)
 - Associated URL scheme: `com.reyzie.hymns` (OAuth redirect)
 
 ---
@@ -147,7 +155,7 @@ The project expects these entitlements (already configured in Xcode):
 ```
 CSI Hymns App/
 ├── CSIHymnsApp.swift          # App entry + lifecycle
-├── AppDelegate.swift          # OneSignal, push setup
+├── AppDelegate.swift          # FCM, APNs setup
 ├── changelog.json             # In-app welcome changelog
 ├── Legal/                     # In-app Privacy Policy & Terms
 ├── Models/                    # Hymn, CarolChurch, CarolSong, CarolPdf, …

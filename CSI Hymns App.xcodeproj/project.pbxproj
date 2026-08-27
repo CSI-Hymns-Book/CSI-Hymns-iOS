@@ -8,7 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		F58F5A412FB9AE3100861475 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = F58F5A402FB9AE3100861475 /* Supabase */; };
-		F58F5A512FB9AE3100861475 /* OneSignalFramework in Frameworks */ = {isa = PBXBuildFile; productRef = F58F5A502FB9AE3100861475 /* OneSignalFramework */; };
+		F58F5A512FB9AE3100861475 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = F58F5A502FB9AE3100861475 /* FirebaseCore */; };
+		F58F5A612FB9AE3100861475 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = F58F5A622FB9AE3100861475 /* FirebaseMessaging */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -42,7 +43,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				F58F5A412FB9AE3100861475 /* Supabase in Frameworks */,
-				F58F5A512FB9AE3100861475 /* OneSignalFramework in Frameworks */,
+				F58F5A512FB9AE3100861475 /* FirebaseCore in Frameworks */,
+				F58F5A612FB9AE3100861475 /* FirebaseMessaging in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -86,7 +88,8 @@
 			name = "CSI Hymns App";
 			packageProductDependencies = (
 				F58F5A402FB9AE3100861475 /* Supabase */,
-				F58F5A502FB9AE3100861475 /* OneSignalFramework */,
+				F58F5A502FB9AE3100861475 /* FirebaseCore */,
+				F58F5A622FB9AE3100861475 /* FirebaseMessaging */,
 			);
 			productName = "CSI Hymns App";
 			productReference = F58F59952FB9AA2800861475 /* CSI Hymns App.app */;
@@ -123,7 +126,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				F58F5A3F2FB9AE3000861475 /* XCRemoteSwiftPackageReference "supabase-swift" */,
-				F58F5A4F2FB9AE3000861475 /* XCRemoteSwiftPackageReference "OneSignal-iOS-SDK" */,
+				F58F5A4F2FB9AE3000861475 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = F58F59962FB9AA2800861475 /* Products */;
@@ -403,12 +406,12 @@
 				minimumVersion = 2.5.1;
 			};
 		};
-		F58F5A4F2FB9AE3000861475 /* XCRemoteSwiftPackageReference "OneSignal-iOS-SDK" */ = {
+		F58F5A4F2FB9AE3000861475 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/OneSignal/OneSignal-iOS-SDK";
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 5.0.0;
+				minimumVersion = 11.0.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -419,10 +422,15 @@
 			package = F58F5A3F2FB9AE3000861475 /* XCRemoteSwiftPackageReference "supabase-swift" */;
 			productName = Supabase;
 		};
-		F58F5A502FB9AE3100861475 /* OneSignalFramework */ = {
+		F58F5A502FB9AE3100861475 /* FirebaseCore */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = F58F5A4F2FB9AE3000861475 /* XCRemoteSwiftPackageReference "OneSignal-iOS-SDK" */;
-			productName = OneSignalFramework;
+			package = F58F5A4F2FB9AE3000861475 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+		F58F5A622FB9AE3100861475 /* FirebaseMessaging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F58F5A4F2FB9AE3000861475 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseMessaging;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

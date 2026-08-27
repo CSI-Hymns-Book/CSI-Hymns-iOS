@@ -1,10 +1,6 @@
 import SwiftUI
 import Observation
 
-#if canImport(OneSignalFramework)
-import OneSignalFramework
-#endif
-
 @main
 struct CSIHymnsApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
@@ -148,12 +144,9 @@ struct CSIHymnsApp: App {
     private func requestPushPermissionIfNeeded() {
         guard !hasRequestedPushPermission else { return }
         hasRequestedPushPermission = true
-        AppDelegate.startOneSignalIfNeeded()
-        
-        #if canImport(OneSignalFramework)
-        OneSignal.Notifications.requestPermission({ accepted in
-            print("OneSignal: Push permission accepted: \(accepted)")
-        }, fallbackToSettings: false)
-        #endif
+
+        Task {
+            _ = await consent.requestOsPushPermission()
+        }
     }
 }
