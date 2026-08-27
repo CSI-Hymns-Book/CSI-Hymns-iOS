@@ -57,9 +57,9 @@ Native **SwiftUI** app for the Kannada CSI Hymns & Keerthane lyrics book. Built 
 - Remote lyric refresh from GitHub with **local-first** cache (background re-check about every 3 days)
 
 ### Worship & community
-- **Order of Service** — liturgy hub with PDF reader, page navigation, and a split-pane landscape layout
+- **Order of Service** — liturgy hub (regular Sunday + festival pages) with a bilingual reader, page navigation, and a split-pane landscape layout
 - **Community Carols** — church-first model: create a parish, then add **songs (lyrics)** or **PDF sheets** separately
-- **Custom categories** — build and sync personal song folders
+- **Categories** — liturgical seasons, occasion collections (birthday, marriage, funeral, and more), plus personal folders (guests limited to 5; signed-in users sync)
 - **Favorites** and **recent songs**
 
 ### Account & sync
@@ -77,8 +77,8 @@ Native **SwiftUI** app for the Kannada CSI Hymns & Keerthane lyrics book. Built 
 - **Liquid Glass** navigation bars, tab bar, and list cards (iOS 26)
 - Light / Dark / AMOLED themes with accent color picker
 - Optional tactile haptics, in-app changelog, and announcement dialogs
-- Force-update gate, in-app lyric/audio issue reporting via Jira, optional PostHog analytics
-- Optional Chromecast (remote-config gated; Google Cast SDK is not bundled via SPM)
+- Force-update gate, in-app lyric / audio / liturgy issue reporting via Jira (track status in **Settings → Reported Issues Log**), optional PostHog analytics
+- **AirPlay** from the hymn reader; optional Chromecast (remote-config gated; Google Cast SDK is not bundled via SPM)
 - Push notifications (OneSignal), with an in-app opt-out in Privacy Centre
 - Optional **Support the Project** donations when enabled in remote config
 
@@ -155,12 +155,15 @@ CSI Hymns App/
 ├── Views/
 │   ├── HomeSelectorView.swift # CSI / M.T. / liturgies home
 │   ├── HymnsListView.swift    # Hymn, keerthane, and M.T. lists
-│   ├── HymnDetailView.swift   # Lyrics reader + audio / MIDI
+│   ├── HymnDetailView.swift   # Lyrics reader + audio / MIDI / AirPlay
 │   ├── Auth/                  # Sign in / sign up
 │   ├── Onboarding/            # First-run tour + DPDP consent
+│   ├── Categories/            # Seasons, occasions, custom folders
+│   ├── Favorites/             # Saved songs
 │   ├── Christmas/             # Church-first community carols
-│   ├── Service/               # Order of Service + PDF reader
+│   ├── Service/               # Order of Service reader
 │   ├── Settings/              # Profile, Privacy Centre, themes, tickets
+│   ├── Support/               # Optional donations
 │   └── GlassChrome.swift      # Liquid Glass helpers
 ├── Assets.xcassets/           # App icon, hymn/keerthane art, bundled JSON
 ├── Info.plist
@@ -196,10 +199,11 @@ Kotlin/Android parity spec: [`supabase/CAROL_ANDROID_PARITY_BRIEF.md`](supabase/
 |---------|--------|
 | Hymns / keerthanes / M.T. hymns (bundled) | `Assets.xcassets/*_data.dataset` |
 | Hymns / keerthanes / M.T. hymns (updates) | [csi-hymns-vault](https://github.com/Reynold29/csi-hymns-vault) on GitHub |
+| Order of Service liturgies (bundled + updates) | Same vault (`order-of-service_data.json`) + `order_of_service_data.dataset` |
 | MIDI accompaniments | [midi-vault](https://github.com/Reynold29/midi-vault) |
 | OGG audio fallback | [midi-files](https://github.com/reynold29/midi-files) |
 | Carols (legacy seed) | Same vault + Supabase |
-| Order of Service PDFs | Remote URLs with on-device cache |
+| Carol PDF sheets | Supabase storage (`carol-pdfs`) with on-device cache |
 
 ---
 
@@ -220,7 +224,7 @@ Public policy page: [CSI Hymns Privacy Policy](https://sites.google.com/view/csi
 
 ## Contributing
 
-This repository is maintained by the CSI Hymns Book team. For lyric corrections or bugs, use **Report an Issue** inside the app (Settings) or open a GitHub issue.
+This repository is maintained by the CSI Hymns Book team. For lyric corrections or bugs, use **Report Issue** on a hymn or liturgy page (then follow status in **Settings → Reported Issues Log**) or open a GitHub issue.
 
 ---
 
