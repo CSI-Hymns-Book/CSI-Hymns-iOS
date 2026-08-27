@@ -2,10 +2,6 @@ import Foundation
 import Observation
 import UserNotifications
 
-#if canImport(OneSignalFramework)
-import OneSignalFramework
-#endif
-
 enum ConsentStorageKeys {
     static let analytics = "csi_consent_analytics"
     static let push = "csi_consent_push"
@@ -229,14 +225,11 @@ public final class ConsentManager {
     }
     
     private func applyPushSideEffect(_ enabled: Bool) {
-        #if canImport(OneSignalFramework)
         if enabled {
-            AppDelegate.startOneSignalIfNeeded()
-            OneSignal.User.pushSubscription.optIn()
-            OneSignal.Notifications.requestPermission({ _ in }, fallbackToSettings: true)
+            // Registers for APNs; FCM token + topics sync after APNs token arrives.
+            FirebaseMessagingService.enablePush()
         } else {
-            OneSignal.User.pushSubscription.optOut()
+            FirebaseMessagingService.unsubscribeFromAllTopics()
         }
-        #endif
     }
 }
