@@ -123,9 +123,9 @@ cp "CSI Hymns App/Secrets.plist.template" "CSI Hymns App/Secrets.plist"
 
 Push notifications use **Firebase Cloud Messaging** (same Firebase project as Android: `hymnappnoti`).
 
-1. In [Firebase Console](https://console.firebase.google.com/), open project **hymnappnoti** and add an **iOS app** with bundle ID `com.reyzie.hymns` if it is not registered yet.
-2. Download **GoogleService-Info.plist** and replace `CSI Hymns App/GoogleService-Info.plist` (the repo copy includes a placeholder `GOOGLE_APP_ID` until you do this).
-3. Upload your **APNs authentication key** (or certificate) under Project settings → Cloud Messaging so FCM can deliver to iOS devices.
+1. The repo already includes `CSI Hymns App/GoogleService-Info.plist` for the shared `hymnappnoti` iOS app (`com.reyzie.hymns`). Leave it in place unless you are pointing the build at a different Firebase project.
+2. If you use your own Firebase project, add an **iOS app** with bundle ID `com.reyzie.hymns` in the [Firebase Console](https://console.firebase.google.com/), then replace that plist with the file you download.
+3. Upload your **APNs authentication key** (or certificate) under Project settings → Cloud Messaging so FCM can deliver to physical iOS devices.
 
 ### 4. Open in Xcode
 
@@ -174,6 +174,7 @@ CSI Hymns App/
 │   ├── Support/               # Optional donations
 │   └── GlassChrome.swift      # Liquid Glass helpers
 ├── Assets.xcassets/           # App icon, hymn/keerthane art, bundled JSON
+├── GoogleService-Info.plist   # Firebase / FCM (shared hymnappnoti project)
 ├── Info.plist
 ├── Secrets.plist              # Local only (gitignored)
 └── CSI Hymns App.entitlements
