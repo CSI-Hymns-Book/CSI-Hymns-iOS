@@ -43,17 +43,20 @@ final class FirebaseMessagingService: NSObject {
         Messaging.messaging().setAPNSToken(deviceToken, type: apnsType)
         hasApnsToken = true
         print("HymnsFCM: APNs token set (\(deviceToken.count) bytes, type=\(apnsType == .sandbox ? "sandbox" : "prod"))")
-        if pendingTopicSync || ConsentManager.shared.pushConsent {
+        guard ConsentManager.shared.pushConsent else {
             pendingTopicSync = false
-            performTokenAndTopicSync()
+            return
         }
+        pendingTopicSync = false
+        performTokenAndTopicSync()
         #endif
     }
 
     /// Requests APNs registration. Topic/token sync runs after APNs succeeds.
     static func enablePush() {
-        UIApplication.shared.registerForRemoteNotifications()
         Task { @MainActor in
+            guard ConsentManager.shared.pushConsent else { return }
+            UIApplication.shared.registerForRemoteNotifications()
             let service = FirebaseMessagingService.shared
             if service.hasApnsToken {
                 service.performTokenAndTopicSync()
@@ -104,6 +107,10 @@ final class FirebaseMessagingService: NSObject {
     }
 
     func handleTokenRefresh(_ token: String?) {
+        guard ConsentManager.shared.pushConsent else {
+            pendingTopicSync = false
+            return
+        }
         guard let token, !token.isEmpty else { return }
         Self.persistAndSyncToken(token)
         #if canImport(FirebaseMessaging)
@@ -118,6 +125,10 @@ final class FirebaseMessagingService: NSObject {
 
     private func performTokenAndTopicSync() {
         #if canImport(FirebaseMessaging)
+        guard ConsentManager.shared.pushConsent else {
+            pendingTopicSync = false
+            return
+        }
         guard Messaging.messaging().apnsToken != nil || hasApnsToken else {
             pendingTopicSync = true
             print("HymnsFCM: waiting for APNs token before FCM sync")
@@ -135,6 +146,7 @@ final class FirebaseMessagingService: NSObject {
                 }
                 guard let token, !token.isEmpty else { return }
                 Task { @MainActor in
+                    guard ConsentManager.shared.pushConsent else { return }
                     Self.persistAndSyncToken(token)
                     FirebaseMessagingService.shared.subscribeDefaultTopicsOnly()
                 }
