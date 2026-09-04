@@ -179,8 +179,9 @@ public struct RootTabView: View {
         }
         .task {
             activeAnnouncement = await AnnouncementsService.shared.getActiveUndismissedBroadcast()
-            await navigationManager.fetchMangaloreHymnsEnabled()
-            if !navigationManager.isMangaloreHymnsEnabled {
+            await navigationManager.syncMangaloreFromConfig()
+            // Only skip the chooser when Mangalore is explicitly off — missing/failed fetch must not jump into CSI Hymns.
+            if AppConfigService.shared.config.isMangaloreHymnsEnabled == false {
                 navigationManager.activeSection = .csi
             }
         }

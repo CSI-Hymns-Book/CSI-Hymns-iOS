@@ -25,7 +25,7 @@ public final class ConsentManager {
     
     public static let grievanceEmail = "reynoldclare02@gmail.com"
     public static let dataFiduciaryName = "Reynold Clare (CSI Hymns)"
-    public static let dataFiduciaryRegion = "Bengaluru, Karnataka, India"
+    public static let dataFiduciaryRegion = "Mysuru, Karnataka, India"
     
     public enum LegalLanguage: String, CaseIterable, Identifiable {
         case english = "en"

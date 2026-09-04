@@ -177,7 +177,7 @@ public enum LegalDocuments {
         To the extent permitted by Indian law, we are not liable for indirect or consequential loss arising from use of the app. Nothing in these terms limits liability that cannot be limited by law.
         """),
         LegalSection(id: "law", heading: "8. Governing law", body: """
-        These terms are governed by the laws of India. Courts at Bengaluru, Karnataka shall have exclusive jurisdiction, subject to mandatory protections for consumers and Data Principals.
+        These terms are governed by the laws of India. Courts at Mysuru, Karnataka shall have exclusive jurisdiction, subject to mandatory protections for consumers and Data Principals.
         """)
     ]
     
@@ -247,7 +247,7 @@ public enum LegalDocuments {
         ಭಾರತೀಯ ಕಾನೂನು ಅನುಮತಿಸುವ ಮಟ್ಟಿಗೆ ಪರೋಕ್ಷ ನಷ್ಟಕ್ಕೆ ಹೊಣೆಯಲ್ಲ. ಕಾನೂನು ಮಿತಿಗೊಳಿಸಲಾಗದ ಹೊಣೆಯನ್ನು ಇವು ಕಡಿಮೆ ಮಾಡುವುದಿಲ್ಲ.
         """),
         LegalSection(id: "law", heading: "೮. ಕಾನೂನು", body: """
-        ಭಾರತದ ಕಾನೂನು ಅನ್ವಯ. ಬೆಂಗಳೂರು ನ್ಯಾಯಾಲಯಗಳಿಗೆ ವಿಶೇಷ ವ್ಯಾಪ್ತಿ, ಗ್ರಾಹಕ ಮತ್ತು ದತ್ತಾಂಶ ಹಕ್ಕುಗಳಿಗೆ ಒಳಪಟ್ಟು.
+        ಭಾರತದ ಕಾನೂನು ಅನ್ವಯ. ಮೈಸೂರು ನ್ಯಾಯಾಲಯಗಳಿಗೆ ವಿಶೇಷ ವ್ಯಾಪ್ತಿ, ಗ್ರಾಹಕ ಮತ್ತು ದತ್ತಾಂಶ ಹಕ್ಕುಗಳಿಗೆ ಒಳಪಟ್ಟು.
         """)
     ]
 }

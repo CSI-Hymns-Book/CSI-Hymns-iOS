@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// First-run walkthrough aligned with Android onboarding, plus an in-app privacy step.
+/// First-run privacy gate (Android ConsentGate), then a two-page tour.
 public struct OnboardingView: View {
     @Bindable private var consent = ConsentManager.shared
     @State private var currentIndex = 0
@@ -9,13 +9,9 @@ public struct OnboardingView: View {
     @State private var featureVisibleCount = 0
     
     private var needsConsent: Bool { !consent.hasValidRequiredConsent }
-    private var isPolicyUpdateOnly: Bool { needsConsent && consent.hasCompletedTour }
-    private var pageCount: Int {
-        if isPolicyUpdateOnly { return 1 }
-        return needsConsent ? 3 : 2
-    }
+    private var pageCount: Int { needsConsent ? 1 : 2 }
     private var isLastPage: Bool { currentIndex >= pageCount - 1 }
-    private var isPrivacyPage: Bool { needsConsent && isLastPage }
+    private var isPrivacyPage: Bool { needsConsent }
     
     private let features: [(icon: String, tint: Color, title: String, body: String)] = [
         ("book.closed.fill", Color(hex: "7EB8FF"), "Hymns & Keerthane", "Bilingual lyrics, meter sorting, and page-flip reading."),
@@ -37,15 +33,12 @@ public struct OnboardingView: View {
                 .ignoresSafeArea()
                 
                 VStack(spacing: 0) {
-                    if isPolicyUpdateOnly {
+                    if needsConsent {
                         privacyPage
                     } else {
                         TabView(selection: $currentIndex) {
                             welcomePage.tag(0)
                             featuresPage.tag(1)
-                            if needsConsent {
-                                privacyPage.tag(2)
-                            }
                         }
                         .tabViewStyle(.page(indexDisplayMode: .never))
                         .animation(.easeInOut(duration: 0.35), value: currentIndex)
@@ -139,87 +132,92 @@ public struct OnboardingView: View {
     
     private var privacyPage: some View {
         VStack(spacing: 0) {
-            Spacer()
-            
-            Image("app_logo")
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .frame(width: 88, height: 88)
-                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .shadow(color: Color.black.opacity(0.3), radius: 14, y: 8)
-            
-            Text(isPolicyUpdateOnly
-                 ? (consent.language == .kannada ? "ನೀತಿ ನವೀಕರಣ" : "Policy update")
-                 : (consent.language == .kannada ? "ಮುಂದುವರಿಯಿರಿ" : "One more step"))
-                .font(.system(size: 28, weight: .heavy))
-                .foregroundColor(.white)
-                .padding(.top, 24)
-            
-            Text(consent.language == .kannada
-                 ? "ಒಪ್ಪಿ ಒತ್ತುವ ಮೂಲಕ ನೀವು ನಮ್ಮ ಗೌಪ್ಯತಾ ನೀತಿ ಮತ್ತು ನಿಯಮಗಳನ್ನು ಒಪ್ಪುತ್ತೀರಿ."
-                 : "By tapping Agree, you accept our Privacy Policy and Terms of Use.")
-                .font(.system(size: 17))
-                .foregroundColor(.white.opacity(0.72))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
-                .padding(.top, 10)
-            
-            HStack(spacing: 20) {
-                Button {
-                    openedLegal = .privacy
-                } label: {
-                    Text(consent.language == .kannada ? "ಗೌಪ್ಯತಾ ನೀತಿ" : "Privacy Policy")
-                        .underline()
-                }
-                Button {
-                    openedLegal = .terms
-                } label: {
-                    Text(consent.language == .kannada ? "ನಿಯಮಗಳು" : "Terms of Use")
-                        .underline()
-                }
-            }
-            .font(.system(size: 16, weight: .semibold))
-            .foregroundColor(Color(hex: "8CE0B3"))
-            .padding(.top, 18)
-            
-            Picker("Language", selection: $consent.language) {
-                ForEach(ConsentManager.LegalLanguage.allCases) { lang in
-                    Text(lang.label).tag(lang)
-                }
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, 48)
-            .padding(.top, 28)
-            
-            Spacer()
-            
-            HStack(spacing: 12) {
-                if !isPolicyUpdateOnly {
-                    Button {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        withAnimation { currentIndex = max(0, currentIndex - 1) }
-                    } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 52, height: 52)
-                            .background(Color.white.opacity(0.12))
-                            .clipShape(Circle())
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    Image("app_logo")
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 88, height: 88)
+                        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .shadow(color: Color.black.opacity(0.3), radius: 14, y: 8)
+                        .padding(.top, 28)
+
+                    Text(consent.language == .kannada ? "ಮುಂದುವರಿಯುವ ಮೊದಲು" : "Before you continue")
+                        .font(.system(size: 28, weight: .heavy))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                        .padding(.top, 24)
+
+                    Text(consent.language == .kannada
+                         ? "CSI Hymns ಭಾರತ ಸರ್ಕಾರದ ದತ್ತಾಂಶ ಸಂರಕ್ಷಣಾ ಕಾನೂನುಗಳನ್ನು ಪಾಲಿಸುತ್ತದೆ. ನಿಮ್ಮ ಮಾಹಿತಿಯನ್ನು ಸುರಕ್ಷಿತವಾಗಿ ಇರಿಸಲಾಗುತ್ತದೆ."
+                         : "CSI Hymns complies with Indian government data protection laws. Your information is kept safe and secure.")
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundColor(.white.opacity(0.86))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 14)
+
+                    Text(consent.language == .kannada
+                         ? "ಗೀತೆಗಳನ್ನು ಓದಲು, ಈ ಪುಟದ ಕೆಳಗಿರುವ ಬಿಳಿ ಗುಂಡಿಯನ್ನು ಒತ್ತಿ. ಒಪ್ಪಿ ಒತ್ತುವ ಮೂಲಕ ನೀವು ನಮ್ಮ ಗೌಪ್ಯತಾ ನೀತಿ ಮತ್ತು ನಿಯಮಗಳನ್ನು ಒಪ್ಪುತ್ತೀರಿ."
+                         : "To use the hymn book, please tap the white button at the bottom of this screen. By tapping Agree, you accept our Privacy Policy and Terms of Use.")
+                        .font(.system(size: 17))
+                        .foregroundColor(.white.opacity(0.72))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 12)
+
+                    Text(consent.language == .kannada ? "ಓದಲು ಇಲ್ಲಿ ಒತ್ತಿ" : "Tap to read")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.55))
+                        .padding(.top, 20)
+
+                    HStack(spacing: 24) {
+                        Button {
+                            openedLegal = .privacy
+                        } label: {
+                            Text(consent.language == .kannada ? "ಗೌಪ್ಯತಾ ನೀತಿ" : "Privacy Policy")
+                                .underline()
+                        }
+                        Button {
+                            openedLegal = .terms
+                        } label: {
+                            Text(consent.language == .kannada ? "ನಿಯಮಗಳು" : "Terms of Use")
+                                .underline()
+                        }
                     }
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(Color(hex: "8CE0B3"))
+                    .padding(.top, 8)
+
+                    Picker("Language", selection: $consent.language) {
+                        ForEach(ConsentManager.LegalLanguage.allCases) { lang in
+                            Text(lang.label).tag(lang)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal, 48)
+                    .padding(.top, 28)
+                    .padding(.bottom, 16)
                 }
-                
+            }
+
+            VStack(spacing: 8) {
                 Button {
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                     finish()
                 } label: {
-                    Text(consent.language == .kannada ? "ಒಪ್ಪಿ" : "Agree")
+                    Text(consent.language == .kannada ? "ಒಪ್ಪಿ, ಮುಂದುವರಿಯಿರಿ" : "Agree and continue")
                         .font(.system(size: 18, weight: .bold))
                         .foregroundColor(.black)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 54)
+                        .frame(height: 56)
                         .background(Color.white)
                         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 }
+                Text(consent.language == .kannada ? "ಆ್ಯಪ್ ಬಳಸಲು ಈ ಗುಂಡಿಯನ್ನು ಒತ್ತಿ" : "Tap this button to use the app")
+                    .font(.system(size: 14))
+                    .foregroundColor(.white.opacity(0.7))
+                    .frame(maxWidth: .infinity)
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 22)
@@ -243,11 +241,7 @@ public struct OnboardingView: View {
                 HStack {
                     Button("Skip tour") {
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        if needsConsent {
-                            withAnimation { currentIndex = pageCount - 1 }
-                        } else {
-                            finish()
-                        }
+                        finish()
                     }
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.white.opacity(0.55))
@@ -353,6 +347,8 @@ public struct OnboardingView: View {
     private func finish() {
         if needsConsent {
             consent.acceptCurrentPolicy()
+            currentIndex = 0
+            return
         }
         consent.markTourCompleted()
     }

@@ -80,6 +80,34 @@ public struct RemoteAppConfig: Sendable {
     public static func meterMidiFileName(_ option: String) -> String {
         MeterUtils.meterMidiFileName(option)
     }
+
+    /// Keep previously known values when a fetch omits a key. Explicit false/empty still wins.
+    public func coalescing(_ previous: RemoteAppConfig) -> RemoteAppConfig {
+        var merged = self
+        merged.isChristmasTime = isChristmasTime ?? previous.isChristmasTime
+        merged.forceUpdateEnabled = forceUpdateEnabled ?? previous.forceUpdateEnabled
+        merged.forceUpdateMinVersion = forceUpdateMinVersion ?? previous.forceUpdateMinVersion
+        merged.forceUpdateMinBuildNumber = forceUpdateMinBuildNumber ?? previous.forceUpdateMinBuildNumber
+        merged.forceUpdateMessage = forceUpdateMessage ?? previous.forceUpdateMessage
+        merged.forceUpdateAndroidStoreUrl = forceUpdateAndroidStoreUrl ?? previous.forceUpdateAndroidStoreUrl
+        merged.forceUpdateIosStoreUrl = forceUpdateIosStoreUrl ?? previous.forceUpdateIosStoreUrl
+        merged.castEnabled = castEnabled ?? previous.castEnabled
+        merged.castAppId = castAppId ?? previous.castAppId
+        merged.castReceiverUrl = castReceiverUrl ?? previous.castReceiverUrl
+        merged.pageFlipVisible = pageFlipVisible ?? previous.pageFlipVisible
+        merged.adminEmails = adminEmails ?? previous.adminEmails
+        merged.githubMidiToken = githubMidiToken ?? previous.githubMidiToken
+        merged.isMangaloreHymnsEnabled = isMangaloreHymnsEnabled ?? previous.isMangaloreHymnsEnabled
+        merged.midiHymnsRanges = midiHymnsRanges ?? previous.midiHymnsRanges
+        merged.midiKeerthanesRanges = midiKeerthanesRanges ?? previous.midiKeerthanesRanges
+        merged.disableOggFallback = disableOggFallback ?? previous.disableOggFallback
+        merged.audioBackupUrl = audioBackupUrl ?? previous.audioBackupUrl
+        merged.isAdyenEnabled = isAdyenEnabled ?? previous.isAdyenEnabled
+        merged.isRazorpayEnabled = isRazorpayEnabled ?? previous.isRazorpayEnabled
+        merged.paymentsEnabled = paymentsEnabled ?? previous.paymentsEnabled
+        merged.masterRootPasscode = masterRootPasscode ?? previous.masterRootPasscode
+        return merged
+    }
 }
 
 public enum AppConfigKeys {
@@ -190,10 +218,13 @@ public final class AppConfigService {
             next.isRazorpayEnabled = dict[AppConfigKeys.isRazorpayEnabled]?.boolValue
             next.paymentsEnabled = dict[AppConfigKeys.paymentsEnabled]?.boolValue
             next.masterRootPasscode = nonEmpty(dict[AppConfigKeys.masterRootPasscode]?.stringValue)
-            
+
+            let previous = config
+            next = next.coalescing(previous)
             config = next
             isLoaded = true
             persistCache(next)
+            print("AppConfigService: fetched rows=\(rows.count) mangalore=\(String(describing: next.isMangaloreHymnsEnabled))")
             
             if let passcode = next.masterRootPasscode {
                 UserDefaults.standard.set(passcode, forKey: "cached_master_root_passcode")
