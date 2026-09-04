@@ -80,32 +80,6 @@ public final class BackgroundSyncService {
     }
     
     private func syncOrderOfServiceIfNeeded() async {
-        let last = UserDefaults.standard.double(forKey: "lastOrderOfServiceUpdate")
-        let now = Date().timeIntervalSince1970 * 1000 // millisecond epoch
-        let interval: Double = 3 * 24 * 60 * 60 * 1000 // 3 days
-        
-        guard now - last >= interval else {
-            print("[BackgroundSync] Order of Service update skipped (within 3 days).")
-            return
-        }
-        
-        print("[BackgroundSync] Syncing Order of Service...")
-        let url = URL(string: "https://raw.githubusercontent.com/Reynold29/csi-hymns-vault/refs/heads/main/order-of-service_data.json")!
-        
-        do {
-            let (data, response) = try await URLSession.shared.data(from: url)
-            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
-                _ = try OrderPage.parsePages(from: data)
-                
-                UserDefaults.standard.set(data, forKey: "orderOfServiceData")
-                UserDefaults.standard.set(now, forKey: "lastOrderOfServiceUpdate")
-                print("[BackgroundSync] Order of Service sync succeeded.")
-                
-                // Alert UI observers
-                NotificationCenter.default.post(name: Notification.Name("csi_liturgies_refreshed"), object: nil)
-            }
-        } catch {
-            print("[BackgroundSync] Order of Service sync failed: \(error)")
-        }
+        await OrderOfServiceStore.ensureSeededAndRefreshIfStale()
     }
 }

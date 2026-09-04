@@ -129,20 +129,17 @@ public struct RecentSongsView: View {
         var matched: [Hymn] = []
         
         for key in recentsService.recentSongKeys {
-            if key.hasPrefix("hymn_") {
-                let num = Int(key.replacingOccurrences(of: "hymn_", with: "")) ?? 0
-                if let song = FavoritesManager.shared.getHymnFromCache(number: num, type: "hymn") {
-                    matched.append(song)
-                } else {
-                    matched.append(Hymn(number: num, title: "Hymn \(num)", signature: "", lyricsKannada: "", lyricsEnglish: "", type: "hymn"))
-                }
-            } else if key.hasPrefix("keerthane_") {
-                let num = Int(key.replacingOccurrences(of: "keerthane_", with: "")) ?? 0
-                if let song = FavoritesManager.shared.getHymnFromCache(number: num, type: "keerthane") {
-                    matched.append(song)
-                } else {
-                    matched.append(Hymn(number: num, title: "Keerthane \(num)", signature: "", lyricsKannada: "", lyricsEnglish: "", type: "keerthane"))
-                }
+            guard let parsed = SupabaseService.parseSongKey(key) else { continue }
+            let titlePrefix: String
+            switch parsed.type {
+            case "keerthane": titlePrefix = "Keerthane"
+            case "mt": titlePrefix = "M.T."
+            default: titlePrefix = "Hymn"
+            }
+            if let song = FavoritesManager.shared.getHymnFromCache(number: parsed.id, type: parsed.type) {
+                matched.append(song)
+            } else {
+                matched.append(Hymn(number: parsed.id, title: "\(titlePrefix) \(parsed.id)", signature: "", lyricsKannada: "", lyricsEnglish: "", type: parsed.type))
             }
         }
         

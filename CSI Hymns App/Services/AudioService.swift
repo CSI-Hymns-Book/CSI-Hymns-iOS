@@ -12,6 +12,7 @@ public final class AudioService: NSObject, Sendable {
     // MARK: - State Properties
     public private(set) var isPlaying = false
     public private(set) var isLoading = false
+    public private(set) var lastError: String?
     public private(set) var currentTime: Double = 0
     public private(set) var duration: Double = 0
     public var playbackRate: Float = 1.0 {
@@ -31,6 +32,12 @@ public final class AudioService: NSObject, Sendable {
         super.init()
         setupAudioSession()
         setupRemoteCommandCenter()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleInterruption),
+            name: AVAudioSession.interruptionNotification,
+            object: nil
+        )
     }
     
     deinit {
@@ -59,19 +66,16 @@ public final class AudioService: NSObject, Sendable {
         
         self.isLoading = true
         self.isPlaying = false
+        self.lastError = nil
         self.currentTime = 0
         self.duration = 0
         
-        // Remove active observers
         removeTimeObserver()
         
         let playerItem = AVPlayerItem(url: url)
-        
-        // Watch for duration resolution
         let player = AVPlayer(playerItem: playerItem)
         self.player = player
         
-        // Track progress & duration
         self.timeObserverToken = player.addPeriodicTimeObserver(
             forInterval: CMTime(seconds: 0.1, preferredTimescale: 600),
             queue: .main
@@ -85,11 +89,16 @@ public final class AudioService: NSObject, Sendable {
             }
         }
         
-        // Notification for track completions
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(playerItemDidReachEnd),
             name: .AVPlayerItemDidPlayToEndTime,
+            object: playerItem
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(playerItemFailed),
+            name: .AVPlayerItemFailedToPlayToEndTime,
             object: playerItem
         )
         
@@ -97,8 +106,21 @@ public final class AudioService: NSObject, Sendable {
         self.isPlaying = true
         self.isLoading = false
         
-        // Set metadata on Lock Screen
         setupNowPlayingMetadata(title: title, subtitle: subtitle)
+    }
+    
+    @objc private func handleInterruption(_ notification: Notification) {
+        guard let info = notification.userInfo,
+              let typeValue = info[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: typeValue),
+              type == .began else { return }
+        pause()
+    }
+    
+    @objc private func playerItemFailed(_ notification: Notification) {
+        lastError = "Couldn't play this audio file."
+        isPlaying = false
+        isLoading = false
     }
     
     public func togglePlayback() {

@@ -44,8 +44,13 @@ public final class ChristmasCarolsService {
     }
     
     public var isAdmin: Bool {
+        if AdminPrefs.isSudoAdminEnabled { return true }
         guard let email = SupabaseService.instance.currentUserEmail?.lowercased() else { return false }
-        return Self.adminEmails.contains(email)
+        if Self.adminEmails.contains(email) { return true }
+        return AdminPrefs.hasAnyAdminRole(
+            currentUserEmail: email,
+            adminEmailsConfig: AppConfigService.shared.config.adminEmails
+        )
     }
     
     public func canDeleteChurch(_ church: CarolChurch) -> Bool {

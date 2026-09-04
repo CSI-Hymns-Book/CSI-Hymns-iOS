@@ -1,8 +1,5 @@
 import SwiftUI
-
-#if canImport(OneSignalFramework)
-import OneSignalFramework
-#endif
+import Observation
 
 @main
 struct CSIHymnsApp: App {
@@ -11,9 +8,9 @@ struct CSIHymnsApp: App {
     @State private var christmasMode = ChristmasModeService.shared
     @State private var themeManager = ThemeManager.shared
     @State private var isShowingWelcome = false
-    @State private var isShowingOnboarding = false
     @State private var forceUpdate: ForceUpdateDecision? = nil
     @State private var hasRequestedPushPermission = false
+    @Bindable private var consent = ConsentManager.shared
     
     // Core release info parsed dynamically from changelog.json
     private var activeRelease: ChangelogRelease {
@@ -64,29 +61,46 @@ struct CSIHymnsApp: App {
             Group {
                 if let decision = forceUpdate, decision.requiresUpdate {
                     ForceUpdateView(message: decision.message, storeURL: decision.iosStoreURL)
-                        .preferredColorScheme(themeManager.colorScheme)
+                        .preferredColorScheme(themeManager.preferredColorScheme)
                 } else {
                     RootTabView()
-                        .preferredColorScheme(themeManager.colorScheme)
+                        .preferredColorScheme(themeManager.preferredColorScheme)
                         .sheet(isPresented: $isShowingWelcome) {
                             WelcomeChangelogView(release: activeRelease) {
                                 isShowingWelcome = false
                                 UserDefaults.standard.set(activeRelease.version, forKey: "last_seen_changelog_version")
                             }
                         }
-                        .sheet(isPresented: $isShowingOnboarding, onDismiss: {
-                            checkChangelogLaunch()
-                        }) {
+                        .fullScreenCover(isPresented: Binding(
+                            get: { !consent.hasValidRequiredConsent || !consent.hasCompletedTour },
+                            set: { _ in }
+                        )) {
                             OnboardingView()
                         }
                         .onAppear {
-                            checkOnboardingOrChangelog()
-                            requestPushPermissionIfNeeded()
+                            if consent.hasValidRequiredConsent && consent.hasCompletedTour {
+                                checkChangelogLaunch()
+                                requestPushPermissionIfNeeded()
+                            }
+                        }
+                        .onChange(of: consent.hasValidRequiredConsent) { _, accepted in
+                            if accepted && consent.hasCompletedTour {
+                                checkChangelogLaunch()
+                                requestPushPermissionIfNeeded()
+                            }
+                        }
+                        .onChange(of: consent.hasCompletedTour) { _, done in
+                            if done && consent.hasValidRequiredConsent {
+                                checkChangelogLaunch()
+                                requestPushPermissionIfNeeded()
+                            }
                         }
                 }
             }
             .task {
                 await waitForSupabaseInitialization()
+                await AppConfigService.shared.refresh()
+                await MidiFileCatalog.shared.refresh()
                 forceUpdate = await ForceUpdateService.shared.getDecision()
                 await CastService.shared.initializeIfEnabled()
                 await PageFlipVisibilityService.shared.refresh()
@@ -97,16 +111,6 @@ struct CSIHymnsApp: App {
                     BackgroundSyncService.shared.performBackgroundSync()
                 }
             }
-        }
-    }
-    
-    private func checkOnboardingOrChangelog() {
-        // Check onboarding first
-        let hasSeenOnboarding = UserDefaults.standard.bool(forKey: "csi_has_seen_onboarding_v1")
-        if !hasSeenOnboarding {
-            isShowingOnboarding = true
-        } else {
-            checkChangelogLaunch()
         }
     }
     
@@ -136,15 +140,16 @@ struct CSIHymnsApp: App {
         }
     }
     
-    /// Requests push permission after the first frame so iOS 27 beta lifecycle is stable.
+    /// First-run only: show the system prompt after the first frame so iOS 27 beta
+    /// lifecycle is stable. Must not call `requestOsPushPermission` again after the
+    /// OS has already decided — that treats a leftover APNs grant as a new consent
+    /// and re-enables FCM after an in-app opt-out.
     private func requestPushPermissionIfNeeded() {
         guard !hasRequestedPushPermission else { return }
         hasRequestedPushPermission = true
-        
-        #if canImport(OneSignalFramework)
-        OneSignal.Notifications.requestPermission({ accepted in
-            print("OneSignal: Push permission accepted: \(accepted)")
-        }, fallbackToSettings: false)
-        #endif
+
+        Task {
+            await consent.requestOsPushPermissionIfUndetermined()
+        }
     }
 }

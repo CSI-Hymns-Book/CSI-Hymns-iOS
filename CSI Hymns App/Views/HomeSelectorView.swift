@@ -3,6 +3,7 @@ import SwiftUI
 public struct HomeSelectorView: View {
     @State private var navigationManager = AppNavigationService.shared
     @State private var theme = ThemeManager.shared
+    @State private var appConfig = AppConfigService.shared
     @Binding var selectedTab: Int
     
     // Animation states for the dynamic mesh background
@@ -11,6 +12,10 @@ public struct HomeSelectorView: View {
     
     public init(selectedTab: Binding<Int>) {
         self._selectedTab = selectedTab
+    }
+    
+    private var showMangalore: Bool {
+        appConfig.isMangaloreEnabled
     }
     
     public var body: some View {
@@ -68,7 +73,8 @@ public struct HomeSelectorView: View {
                                     Image("app_logo")
                                         .resizable()
                                         .scaledToFit()
-                                        .frame(width: 36, height: 36)
+                                        .frame(width: 62, height: 62)
+                                        .clipShape(Circle())
                                 }
                                 .padding(.bottom, 4)
                                 
@@ -132,16 +138,18 @@ public struct HomeSelectorView: View {
                                         }
                                     }
                                     
-                                    premiumSectionCard(title: "Mangalore Hymns", color: Color.orange, iconName: "bookmark") {
-                                        premiumSubItemRow(
-                                            title: "M.T. Hymns",
-                                            subtitle: "ಮಂಗಳೂರು ಕನ್ನಡ ಸಂಗೀತಗಳು",
-                                            assetName: "hymn",
-                                            glowColor: Color.orange
-                                        ) {
-                                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                                navigationManager.activeSection = .mt
-                                                selectedTab = 0
+                                    if showMangalore {
+                                        premiumSectionCard(title: "Mangalore Hymns", color: Color.orange, iconName: "bookmark") {
+                                            premiumSubItemRow(
+                                                title: "M.T. Hymns",
+                                                subtitle: "ಮಂಗಳೂರು ಕನ್ನಡ ಸಂಗೀತಗಳು",
+                                                assetName: "hymn",
+                                                glowColor: Color.orange
+                                            ) {
+                                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                                    navigationManager.activeSection = .mt
+                                                    selectedTab = 0
+                                                }
                                             }
                                         }
                                     }
@@ -178,7 +186,8 @@ public struct HomeSelectorView: View {
                                         Image("app_logo")
                                             .resizable()
                                             .scaledToFit()
-                                            .frame(width: 36, height: 36)
+                                            .frame(width: 62, height: 62)
+                                            .clipShape(Circle())
                                     }
                                     .padding(.bottom, 4)
                                     
@@ -240,16 +249,18 @@ public struct HomeSelectorView: View {
                                 }
                                 
                                 // Section 2: Mangalore Hymns
-                                premiumSectionCard(title: "Mangalore Hymns", color: Color.orange, iconName: "bookmark") {
-                                    premiumSubItemRow(
-                                        title: "M.T. Hymns",
-                                        subtitle: "ಮಂಗಳೂರು ಕನ್ನಡ ಸಂಗೀತಗಳು",
-                                        assetName: "hymn",
-                                        glowColor: Color.orange
-                                    ) {
-                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                            navigationManager.activeSection = .mt
-                                            selectedTab = 0
+                                if showMangalore {
+                                    premiumSectionCard(title: "Mangalore Hymns", color: Color.orange, iconName: "bookmark") {
+                                        premiumSubItemRow(
+                                            title: "M.T. Hymns",
+                                            subtitle: "ಮಂಗಳೂರು ಕನ್ನಡ ಸಂಗೀತಗಳು",
+                                            assetName: "hymn",
+                                            glowColor: Color.orange
+                                        ) {
+                                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                                navigationManager.activeSection = .mt
+                                                selectedTab = 0
+                                            }
                                         }
                                     }
                                 }
@@ -266,19 +277,11 @@ public struct HomeSelectorView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     NavigationLink(destination: SettingsView()) {
-                        ZStack {
-                            Circle()
-                                .fill(theme.cardBackground.opacity(0.6))
-                                .frame(width: 38, height: 38)
-                                .overlay(
-                                    Circle().stroke(theme.cardStroke, lineWidth: 1)
-                                )
-                            
-                            Image(systemName: "gearshape.fill")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(theme.textPrimary)
-                        }
+                        Image(systemName: "gearshape.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(theme.textPrimary)
                     }
+                    .accessibilityLabel("Settings")
                 }
             }
             .onAppear {

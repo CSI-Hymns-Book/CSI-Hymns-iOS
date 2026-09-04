@@ -15,7 +15,7 @@ struct CommonCategoryItem: Identifiable {
 public struct CustomCategoriesView: View {
     @Binding var selectedTab: Int
     @State private var theme = ThemeManager.shared
-    @State private var viewModel = CustomCategoriesViewModel()
+    @State private var viewModel = CustomCategoriesViewModel.shared
     
     struct MtCategoryItem: Identifiable, Sendable {
         let id: String

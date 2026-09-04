@@ -62,7 +62,6 @@ public final class TicketsService: Sendable {
         #if canImport(Supabase)
         let client = SupabaseService.instance.client
         if svc.isAuthenticated, let userId = svc.currentUser?.id {
-            // Fetch by logged-in auth UID
             let tickets: [JiraTicket] = try await client.from("jira_tickets")
                 .select()
                 .eq("user_id", value: userId.uuidString)
@@ -71,13 +70,12 @@ public final class TicketsService: Sendable {
                 .value
             return tickets
         } else {
-            // Fetch by guest device UUID
-            let tickets: [JiraTicket] = try await client.from("jira_tickets")
-                .select()
-                .eq("device_id", value: deviceId)
-                .order("created_at", ascending: false)
-                .execute()
-                .value
+            let tickets: [JiraTicket] = try await client.rpc(
+                "get_guest_tickets",
+                params: ["p_device_id": deviceId]
+            )
+            .execute()
+            .value
             return tickets
         }
         #else
@@ -114,12 +112,25 @@ public final class TicketsService: Sendable {
     public func getTicketMessages(ticketKey: String) async throws -> [TicketMessage] {
         #if canImport(Supabase)
         let client = SupabaseService.instance.client
-        let messages: [TicketMessage] = try await client.from("ticket_messages")
-            .select()
-            .eq("ticket_key", value: ticketKey)
+        if SupabaseService.instance.isAuthenticated {
+            let messages: [TicketMessage] = try await client.from("ticket_messages")
+                .select()
+                .eq("ticket_key", value: ticketKey)
+                .execute()
+                .value
+            return messages.sorted { ($0.createdAt ?? .distantPast) < ($1.createdAt ?? .distantPast) }
+        } else {
+            let messages: [TicketMessage] = try await client.rpc(
+                "get_guest_ticket_messages",
+                params: [
+                    "p_device_id": getDeviceId(),
+                    "p_ticket_key": ticketKey
+                ]
+            )
             .execute()
             .value
-        return messages.sorted { ($0.createdAt ?? .distantPast) < ($1.createdAt ?? .distantPast) }
+            return messages.sorted { ($0.createdAt ?? .distantPast) < ($1.createdAt ?? .distantPast) }
+        }
         #else
         return []
         #endif
@@ -147,13 +158,27 @@ public final class TicketsService: Sendable {
             message: message
         )
         
-        let response: TicketMessage = try await client.from("ticket_messages")
+        if SupabaseService.instance.isAuthenticated {
+            let response: TicketMessage = try await client.from("ticket_messages")
+                .insert(payload)
+                .select()
+                .single()
+                .execute()
+                .value
+            return response
+        }
+        
+        try await client.from("ticket_messages")
             .insert(payload)
-            .select()
-            .single()
             .execute()
-            .value
-        return response
+        return TicketMessage(
+            id: UUID().uuidString,
+            ticketId: ticketId,
+            ticketKey: ticketKey,
+            sender: "user",
+            message: message,
+            createdAt: Date()
+        )
         #else
         return TicketMessage(
             id: UUID().uuidString,

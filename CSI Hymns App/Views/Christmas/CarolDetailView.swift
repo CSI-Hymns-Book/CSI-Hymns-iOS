@@ -6,7 +6,11 @@ public struct CarolDetailView: View {
     
     @AppStorage("use_page_swipe_physics") private var usePageSwipe = true
     @State private var selectedLanguage: String = "Kannada" // Kannada or English
-    @State private var fontSize: CGFloat = 18.0
+    @AppStorage("global_lyrics_font_size") private var storedFontSize: Double = 18.0
+    private var fontSize: CGFloat {
+        get { CGFloat(storedFontSize) }
+        nonmutating set { storedFontSize = Double(newValue) }
+    }
     @State private var isShowingPDF = false
     
     public init(carol: ChristmasCarol) {

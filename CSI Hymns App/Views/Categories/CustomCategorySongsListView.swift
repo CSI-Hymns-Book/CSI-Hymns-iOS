@@ -4,7 +4,7 @@ import Observation
 /// A premium, glassmorphic view rendering the list of songs in a specific custom category folder.
 public struct CustomCategorySongsListView: View {
     @State private var theme = ThemeManager.shared
-    @State private var categoriesViewModel = CustomCategoriesViewModel()
+    @State private var categoriesViewModel = CustomCategoriesViewModel.shared
     let categoryId: String
     
     @State private var songs: [Hymn] = []
@@ -152,7 +152,7 @@ public struct CustomCategorySongsListView: View {
     
     private func loadFolderSongs() {
         isLoading = true
-        categoriesViewModel = CustomCategoriesViewModel() // Refresh
+        categoriesViewModel = CustomCategoriesViewModel.shared
         
         guard let folder = categoriesViewModel.categories.first(where: { $0.id == categoryId }) else {
             songs = []
@@ -163,20 +163,17 @@ public struct CustomCategorySongsListView: View {
         var matched: [Hymn] = []
         
         for key in folder.songIds {
-            if key.hasPrefix("hymn_") {
-                let num = Int(key.replacingOccurrences(of: "hymn_", with: "")) ?? 0
-                if let song = FavoritesManager.shared.getHymnFromCache(number: num, type: "hymn") {
-                    matched.append(song)
-                } else {
-                    matched.append(Hymn(number: num, title: "Hymn \(num)", signature: "", lyricsKannada: "", lyricsEnglish: "", type: "hymn"))
-                }
-            } else if key.hasPrefix("keerthane_") {
-                let num = Int(key.replacingOccurrences(of: "keerthane_", with: "")) ?? 0
-                if let song = FavoritesManager.shared.getHymnFromCache(number: num, type: "keerthane") {
-                    matched.append(song)
-                } else {
-                    matched.append(Hymn(number: num, title: "Keerthane \(num)", signature: "", lyricsKannada: "", lyricsEnglish: "", type: "keerthane"))
-                }
+            guard let parsed = SupabaseService.parseSongKey(key) else { continue }
+            let titlePrefix: String
+            switch parsed.type {
+            case "keerthane": titlePrefix = "Keerthane"
+            case "mt": titlePrefix = "M.T."
+            default: titlePrefix = "Hymn"
+            }
+            if let song = FavoritesManager.shared.getHymnFromCache(number: parsed.id, type: parsed.type) {
+                matched.append(song)
+            } else {
+                matched.append(Hymn(number: parsed.id, title: "\(titlePrefix) \(parsed.id)", signature: "", lyricsKannada: "", lyricsEnglish: "", type: parsed.type))
             }
         }
         
