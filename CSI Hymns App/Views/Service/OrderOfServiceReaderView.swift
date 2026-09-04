@@ -28,25 +28,9 @@ public final class OrderOfServiceReaderViewModel {
         return (start...end).map { pages[$0].pageNo }
     }
     
-    /// Groups pages by their active sections (when a page defines a title).
-    public var groupedSections: [(title: String, pages: [OrderPage])] {
-        var sections: [(title: String, pages: [OrderPage])] = []
-        var activeSectionTitle = ""
-        
-        for page in pages {
-            let explicitTitle = (page.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            if !explicitTitle.isEmpty {
-                activeSectionTitle = explicitTitle
-            }
-            
-            if let idx = sections.firstIndex(where: { $0.title == activeSectionTitle }) {
-                sections[idx].pages.append(page)
-            } else {
-                sections.append((title: activeSectionTitle, pages: [page]))
-            }
-        }
-        
-        return sections
+    /// Groups pages under official TOC headings (page-number ranges), matching Android.
+    public var groupedSections: [OrderPageSection] {
+        OrderOfServiceStore.groupPages(index: indexEntries, pages: pages)
     }
     
     public var pageNoToIndex: [Int: Int] {
@@ -54,7 +38,7 @@ public final class OrderOfServiceReaderViewModel {
     }
     
     @discardableResult
-    public func jumpToPageNo(_ pageNo: Int, fromIndex: Bool = false) -> Bool {
+    public func jumpToPageNo(_ pageNo: Int) -> Bool {
         if let idx = pages.firstIndex(where: { $0.pageNo == pageNo }) {
             currentPageIndex = idx
             jumpUnavailableMessage = nil
@@ -62,11 +46,9 @@ public final class OrderOfServiceReaderViewModel {
             generator.impactOccurred()
             return true
         }
-        if fromIndex {
-            jumpUnavailableMessage = "Page not available yet"
-            let generator = UINotificationFeedbackGenerator()
-            generator.notificationOccurred(.warning)
-        }
+        jumpUnavailableMessage = "Page not available yet"
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.warning)
         return false
     }
     
@@ -254,46 +236,17 @@ public struct OrderOfServiceReaderView: View {
                 .padding(.horizontal, isLandscape ? 60 : 24)
                 .padding(.top, 4)
                 
-                if !viewModel.indexEntries.isEmpty {
+                if !viewModel.groupedSections.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("ಪರಿವಿಡಿ")
                             .font(.system(size: 20, weight: .black))
                             .foregroundColor(.white)
-                        Text("Tap a page number to open that section")
+                        Text("Tap a heading or page number to open that section")
                             .font(.system(size: 12))
                             .foregroundColor(.white.opacity(0.65))
                         
-                        ForEach(viewModel.indexEntries) { entry in
-                            let available = viewModel.pageNoToIndex[entry.pageNo] != nil
-                            Button {
-                                if viewModel.jumpToPageNo(entry.pageNo, fromIndex: true) {
-                                    withAnimation { hasSelectedPage = true }
-                                }
-                            } label: {
-                                HStack(alignment: .top, spacing: 12) {
-                                    Text("\(entry.pageNo)")
-                                        .font(.system(size: 14, weight: .bold, design: .rounded))
-                                        .foregroundColor(available ? .black : .white.opacity(0.45))
-                                        .frame(width: 44, height: 36)
-                                        .background(available ? Color.white : Color.white.opacity(0.08))
-                                        .cornerRadius(10)
-                                    
-                                    Text(entry.title)
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(available ? .white : .white.opacity(0.45))
-                                        .multilineTextAlignment(.leading)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-                                .padding(12)
-                                .background(Color.white.opacity(0.06))
-                                .cornerRadius(14)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 14)
-                                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                                )
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(!available)
+                        ForEach(viewModel.groupedSections) { section in
+                            orderSectionBlock(section, currentPageNo: nil, dismissSheetOnOpen: false)
                         }
                     }
                     .padding(.horizontal, isLandscape ? 60 : 24)
@@ -538,79 +491,17 @@ public struct OrderOfServiceReaderView: View {
     private var allPagesSheet: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    if !viewModel.indexEntries.isEmpty {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("ಪರಿವಿಡಿ")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(.white)
-                            
-                            ForEach(viewModel.indexEntries) { entry in
-                                let available = viewModel.pageNoToIndex[entry.pageNo] != nil
-                                Button {
-                                    if viewModel.jumpToPageNo(entry.pageNo, fromIndex: true) {
-                                        isShowingIndexSheet = false
-                                        withAnimation { hasSelectedPage = true }
-                                    }
-                                } label: {
-                                    HStack(alignment: .top, spacing: 12) {
-                                        Text("\(entry.pageNo)")
-                                            .font(.system(size: 13, weight: .bold))
-                                            .foregroundColor(available ? .black : .white.opacity(0.4))
-                                            .frame(width: 40, height: 32)
-                                            .background(available ? Color.white : Color.white.opacity(0.08))
-                                            .cornerRadius(8)
-                                        Text(entry.title)
-                                            .font(.system(size: 13, weight: .semibold))
-                                            .foregroundColor(available ? .white : .white.opacity(0.4))
-                                            .multilineTextAlignment(.leading)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                    }
-                                    .padding(10)
-                                    .background(Color.white.opacity(0.05))
-                                    .cornerRadius(12)
-                                }
-                                .buttonStyle(.plain)
-                                .disabled(!available)
-                            }
-                        }
-                    }
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("ಪರಿವಿಡಿ")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.white)
                     
-                    Text("Available pages")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.white.opacity(0.85))
-                    
-                    ForEach(viewModel.groupedSections, id: \.title) { section in
-                        VStack(alignment: .leading, spacing: 8) {
-                            if !section.title.isEmpty {
-                                Text(formatHeaderTitle(section.title))
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundColor(.white.opacity(0.8))
-                                    .padding(.horizontal, 4)
-                            }
-                            
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 46))], spacing: 10) {
-                                ForEach(section.pages) { p in
-                                    let isCurrent = viewModel.pages[viewModel.currentPageIndex].pageNo == p.pageNo
-                                    Button {
-                                        _ = viewModel.jumpToPageNo(p.pageNo)
-                                        isShowingIndexSheet = false
-                                        withAnimation { hasSelectedPage = true }
-                                    } label: {
-                                        Text("\(p.pageNo)")
-                                            .font(.system(size: 14, weight: .bold))
-                                            .foregroundColor(isCurrent ? .black : .white)
-                                            .frame(width: 44, height: 44)
-                                            .background(isCurrent ? Color.white : Color.white.opacity(0.1))
-                                            .cornerRadius(10)
-                                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(isCurrent ? 0.5 : 0.15), lineWidth: 1))
-                                    }
-                                }
-                            }
-                        }
-                        .padding(12)
-                        .background(Color.white.opacity(0.04))
-                        .cornerRadius(16)
+                    ForEach(viewModel.groupedSections) { section in
+                        orderSectionBlock(
+                            section,
+                            currentPageNo: viewModel.pages[viewModel.currentPageIndex].pageNo,
+                            dismissSheetOnOpen: true
+                        )
                     }
                 }
                 .padding(16)
@@ -680,6 +571,85 @@ public struct OrderOfServiceReaderView: View {
     }
     
     // MARK: - Helpers
+    
+    private func openSection(_ section: OrderPageSection, dismissSheet: Bool) {
+        let target = section.pages.first?.pageNo ?? section.startPageNo
+        if viewModel.jumpToPageNo(target) {
+            if dismissSheet { isShowingIndexSheet = false }
+            withAnimation { hasSelectedPage = true }
+        }
+    }
+    
+    private func openPage(_ pageNo: Int, dismissSheet: Bool) {
+        if viewModel.jumpToPageNo(pageNo) {
+            if dismissSheet { isShowingIndexSheet = false }
+            withAnimation { hasSelectedPage = true }
+        }
+    }
+    
+    private func orderSectionBlock(
+        _ section: OrderPageSection,
+        currentPageNo: Int?,
+        dismissSheetOnOpen: Bool
+    ) -> some View {
+        let available = !section.pages.isEmpty
+        return VStack(alignment: .leading, spacing: 8) {
+            Button {
+                openSection(section, dismissSheet: dismissSheetOnOpen && available)
+            } label: {
+                HStack(alignment: .top, spacing: 12) {
+                    Text("\(section.startPageNo)")
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundColor(available ? .black : .white.opacity(0.45))
+                        .frame(width: 44, height: 36)
+                        .background(available ? Color.white : Color.white.opacity(0.08))
+                        .cornerRadius(10)
+                    
+                    Text(section.title)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(available ? .white : .white.opacity(0.45))
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(12)
+                .background(Color.white.opacity(0.06))
+                .cornerRadius(14)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+            
+            if available {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 44))], spacing: 8) {
+                    ForEach(section.pages) { page in
+                        let isCurrent = page.pageNo == currentPageNo
+                        Button {
+                            openPage(page.pageNo, dismissSheet: dismissSheetOnOpen)
+                        } label: {
+                            Text("\(page.pageNo)")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundColor(isCurrent ? .black : .white)
+                                .frame(width: 44, height: 44)
+                                .background(isCurrent ? Color.white : Color.white.opacity(0.1))
+                                .cornerRadius(10)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(Color.white.opacity(isCurrent ? 0.5 : 0.15), lineWidth: 1)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            } else {
+                Text("Page not available yet")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.45))
+                    .padding(.leading, 4)
+            }
+        }
+    }
     
     private func formatHeaderTitle(_ raw: String) -> String {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)

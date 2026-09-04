@@ -15,6 +15,20 @@ public struct OrderIndexEntry: Hashable, Identifiable, Sendable {
     }
 }
 
+/// Official TOC heading plus the content pages that fall in that page-number range (Android `OrderPageSection`).
+public struct OrderPageSection: Hashable, Identifiable, Sendable {
+    public var id: String { "\(startPageNo)-\(title)" }
+    public let title: String
+    public let startPageNo: Int
+    public let pages: [OrderPage]
+    
+    public init(title: String, startPageNo: Int, pages: [OrderPage]) {
+        self.title = title
+        self.startPageNo = startPageNo
+        self.pages = pages
+    }
+}
+
 /// Parsed order-of-service document: pages + optional TOC index.
 public struct OrderOfServiceDocument: Sendable {
     public let pages: [OrderPage]
@@ -277,5 +291,46 @@ public enum OrderOfServiceStore {
             return doc
         }
         return merged
+    }
+    
+    /// Groups content pages under official TOC headings by page-number range (Android `groupOrderPagesByIndex`).
+    public static func groupPages(index: [OrderIndexEntry], pages: [OrderPage]) -> [OrderPageSection] {
+        let sortedPages = pages.sorted { $0.pageNo < $1.pageNo }
+        if !index.isEmpty {
+            let sortedIndex = index.sorted { $0.pageNo < $1.pageNo }
+            return sortedIndex.enumerated().map { offset, entry in
+                let nextStart = offset + 1 < sortedIndex.count ? sortedIndex[offset + 1].pageNo : Int.max
+                let sectionPages = sortedPages.filter { $0.pageNo >= entry.pageNo && $0.pageNo < nextStart }
+                return OrderPageSection(title: entry.title, startPageNo: entry.pageNo, pages: sectionPages)
+            }
+        }
+        
+        var sections: [OrderPageSection] = []
+        var currentTitle = ""
+        var currentPages: [OrderPage] = []
+        for page in sortedPages {
+            let title = (page.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !title.isEmpty && title != currentTitle {
+                if !currentPages.isEmpty {
+                    sections.append(OrderPageSection(
+                        title: currentTitle,
+                        startPageNo: currentPages[0].pageNo,
+                        pages: currentPages
+                    ))
+                }
+                currentTitle = title
+                currentPages = [page]
+            } else {
+                currentPages.append(page)
+            }
+        }
+        if !currentPages.isEmpty {
+            sections.append(OrderPageSection(
+                title: currentTitle,
+                startPageNo: currentPages[0].pageNo,
+                pages: currentPages
+            ))
+        }
+        return sections
     }
 }
