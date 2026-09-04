@@ -170,6 +170,14 @@ public final class ConsentManager {
         setPushConsent(granted)
         return granted
     }
+
+    /// Cold-start prompt after onboarding. Skip once iOS has a decision so a
+    /// still-granted system permission cannot override an explicit in-app opt-out.
+    public func requestOsPushPermissionIfUndetermined() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        guard settings.authorizationStatus == .notDetermined else { return }
+        _ = await requestOsPushPermission()
+    }
     
     /// Withdrawal of required consent is as easy as grant: one action. Optional processing stops immediately.
     public func withdrawRequiredConsent() {

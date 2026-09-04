@@ -140,13 +140,16 @@ struct CSIHymnsApp: App {
         }
     }
     
-    /// Requests push permission after the first frame so iOS 27 beta lifecycle is stable.
+    /// First-run only: show the system prompt after the first frame so iOS 27 beta
+    /// lifecycle is stable. Must not call `requestOsPushPermission` again after the
+    /// OS has already decided — that treats a leftover APNs grant as a new consent
+    /// and re-enables FCM after an in-app opt-out.
     private func requestPushPermissionIfNeeded() {
         guard !hasRequestedPushPermission else { return }
         hasRequestedPushPermission = true
 
         Task {
-            _ = await consent.requestOsPushPermission()
+            await consent.requestOsPushPermissionIfUndetermined()
         }
     }
 }
