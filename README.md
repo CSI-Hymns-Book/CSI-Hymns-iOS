@@ -53,11 +53,12 @@ Native **SwiftUI** app for the Kannada CSI Hymns & Keerthane lyrics book. Built 
 - **Bilingual lyrics** (Kannada + English) with page-flip or scroll reading modes
 - Search by number, title, or meter/signature
 - **Audio playback** (OGG accompaniments) plus a **MIDI engine** with SATB part routing, tempo, transpose, and a Settings instrument picker
+- Native **AirPlay** from the hymn reader (always available)
 - Contribute a missing audio or MIDI file from the hymn reader when no track is available
 - Remote lyric refresh from GitHub with **local-first** cache (background re-check about every 3 days)
 
 ### Worship & community
-- **Order of Service** — liturgy hub (regular Sunday + festival pages) with a bilingual reader, page navigation, and a split-pane landscape layout
+- **Order of Service** — liturgy hub (regular Sunday + festival pages) with a bilingual reader, a table of contents of official headings and page numbers, and a split-pane landscape layout
 - **Community Carols** — church-first model: create a parish, then add **songs (lyrics)** or **PDF sheets** separately
 - **Categories** — liturgical seasons, occasion collections (birthday, marriage, funeral, and more), plus personal folders (guests limited to 5; signed-in users sync)
 - **Favorites** and **recent songs**
@@ -68,7 +69,7 @@ Native **SwiftUI** app for the Kannada CSI Hymns & Keerthane lyrics book. Built 
 - Profile editing, **download my information** (zip export, rate-limited), and account deactivation
 
 ### Privacy
-- First-launch **DPDP** notice (English / Kannada) for Privacy Policy and Terms
+- First-launch **DPDP** consent gate (English / Kannada) for Privacy Policy and Terms — required before using the app
 - **Privacy Centre** — review consent, toggle optional analytics and push, withdraw consent, and request rights
 - In-app Privacy Policy and Terms of Use
 
@@ -233,7 +234,7 @@ Public policy page: [CSI Hymns Privacy Policy](https://sites.google.com/view/csi
 
 ## Contributing
 
-This repository is maintained by the CSI Hymns Book team. For lyric corrections or bugs, use **Report Issue** on a hymn or liturgy page (then follow status in **Settings → Reported Issues Log**) or open a GitHub issue.
+This repository is maintained by the CSI Hymns Book team. For lyric corrections or bugs, use **Report Issue** on a hymn or liturgy page, then follow status and reply in **Settings → Reported Issues Log**, or open a GitHub issue.
 
 ---
 
