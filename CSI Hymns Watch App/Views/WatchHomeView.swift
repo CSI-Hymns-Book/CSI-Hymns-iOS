@@ -119,7 +119,7 @@ public struct WatchHomeView: View {
                 // Order of Service
                 NavigationLink(destination: WatchOrderOfServiceView()) {
                     HStack(spacing: 10) {
-                        Image(systemName: "cross.fill")
+                        Image(systemName: "iphone.and.arrow.forward")
                             .font(.system(size: 16))
                             .foregroundColor(.green)
                             .frame(width: 24)
@@ -127,7 +127,7 @@ public struct WatchHomeView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Order of Service")
                                 .font(.system(size: 13, weight: .bold))
-                            Text("ಆರಾಧನಾ ಕ್ರಮ")
+                            Text("Open on iPhone · ಆರಾಧನಾ ಕ್ರಮ")
                                 .font(.system(size: 10))
                                 .foregroundColor(.secondary)
                         }

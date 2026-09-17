@@ -13,6 +13,11 @@ public struct Hymn: Codable, Identifiable, Hashable {
     public let category: String?
     public let kannadaCategory: String?
     
+    // Pre-parsed fields for instantaneous, zero-latency rendering on Apple Watch
+    public let stanzasKannada: [String]
+    public let stanzasEnglish: [String]
+    public let firstLineKannada: String
+    
     enum CodingKeys: String, CodingKey {
         case number
         case title
@@ -37,6 +42,24 @@ public struct Hymn: Codable, Identifiable, Hashable {
         self.type = type
         self.category = category
         self.kannadaCategory = kannadaCategory
+        
+        let kClean = lyricsKannada.trimmingCharacters(in: .whitespacesAndNewlines)
+        let kParts = kClean.isEmpty ? [] : kClean.components(separatedBy: "\n\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        self.stanzasKannada = kParts.isEmpty && !kClean.isEmpty ? [kClean] : kParts
+        
+        let eClean = lyricsEnglish.trimmingCharacters(in: .whitespacesAndNewlines)
+        let eParts = eClean.isEmpty ? [] : eClean.components(separatedBy: "\n\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        self.stanzasEnglish = eParts.isEmpty && !eClean.isEmpty ? [eClean] : eParts
+        
+        if let idx = lyricsKannada.firstIndex(of: "\n") {
+            self.firstLineKannada = String(lyricsKannada[..<idx]).trimmingCharacters(in: .whitespaces)
+        } else {
+            self.firstLineKannada = lyricsKannada.trimmingCharacters(in: .whitespaces)
+        }
     }
     
     public init(from decoder: Decoder) throws {
@@ -79,6 +102,25 @@ public struct Hymn: Codable, Identifiable, Hashable {
         
         self.category = try? container.decode(String.self, forKey: .category)
         self.kannadaCategory = try? container.decode(String.self, forKey: .kannadaCategory)
+        
+        // Pre-parse stanzas and first line once during decoding
+        let kClean = self.lyricsKannada.trimmingCharacters(in: .whitespacesAndNewlines)
+        let kParts = kClean.isEmpty ? [] : kClean.components(separatedBy: "\n\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        self.stanzasKannada = kParts.isEmpty && !kClean.isEmpty ? [kClean] : kParts
+        
+        let eClean = self.lyricsEnglish.trimmingCharacters(in: .whitespacesAndNewlines)
+        let eParts = eClean.isEmpty ? [] : eClean.components(separatedBy: "\n\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        self.stanzasEnglish = eParts.isEmpty && !eClean.isEmpty ? [eClean] : eParts
+        
+        if let idx = self.lyricsKannada.firstIndex(of: "\n") {
+            self.firstLineKannada = String(self.lyricsKannada[..<idx]).trimmingCharacters(in: .whitespaces)
+        } else {
+            self.firstLineKannada = self.lyricsKannada.trimmingCharacters(in: .whitespaces)
+        }
     }
     
     public func encode(to encoder: Encoder) throws {

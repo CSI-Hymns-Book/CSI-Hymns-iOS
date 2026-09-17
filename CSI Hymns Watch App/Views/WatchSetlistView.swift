@@ -2,8 +2,8 @@ import SwiftUI
 
 /// Sunday Service Setlist view on Apple Watch, showing the sequence of songs for today's service.
 public struct WatchSetlistView: View {
-    @StateObject private var setlistStore = WatchSetlistStore.shared
-    @StateObject private var dataLoader = WatchDataLoader.shared
+    @ObservedObject private var setlistStore = WatchSetlistStore.shared
+    @ObservedObject private var dataLoader = WatchDataLoader.shared
     
     public var body: some View {
         List {

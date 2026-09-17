@@ -98,4 +98,17 @@ public final class WatchConnectivityService: NSObject, ObservableObject, WCSessi
             session.transferUserInfo(payload)
         }
     }
+    
+    public func notifyPhoneToOpenOrderOfService() {
+        guard WCSession.isSupported() else { return }
+        let session = WCSession.default
+        guard session.activationState == .activated else { return }
+        
+        let payload: [String: Any] = ["action": "open_order_of_service"]
+        if session.isReachable {
+            session.sendMessage(payload, replyHandler: nil, errorHandler: nil)
+        } else {
+            session.transferUserInfo(payload)
+        }
+    }
 }

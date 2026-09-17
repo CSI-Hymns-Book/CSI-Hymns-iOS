@@ -2,8 +2,8 @@ import SwiftUI
 
 /// Favorites list view on Apple Watch.
 public struct WatchFavoritesView: View {
-    @StateObject private var favStore = WatchFavoritesStore.shared
-    @StateObject private var dataLoader = WatchDataLoader.shared
+    @ObservedObject private var favStore = WatchFavoritesStore.shared
+    @ObservedObject private var dataLoader = WatchDataLoader.shared
     
     private var favoriteSongs: [Hymn] {
         var result: [Hymn] = []

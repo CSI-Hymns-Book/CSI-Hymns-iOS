@@ -7,7 +7,7 @@ import UIKit
 import WatchKit
 #endif
 
-/// Fast offline data loader for Apple Watch, loading hymns, keerthanes, MT hymns, and liturgies.
+/// Fast offline data loader for Apple Watch, indexing hymns, keerthanes, and MT hymns with O(1) lookups.
 @MainActor
 public final class WatchDataLoader: ObservableObject {
     public static let shared = WatchDataLoader()
@@ -15,9 +15,12 @@ public final class WatchDataLoader: ObservableObject {
     @Published public private(set) var hymns: [Hymn] = []
     @Published public private(set) var keerthanes: [Hymn] = []
     @Published public private(set) var mtHymns: [Hymn] = []
-    @Published public private(set) var regularLiturgies: [OrderPage] = []
-    @Published public private(set) var festivalLiturgies: [OrderPage] = []
     @Published public private(set) var isLoaded: Bool = false
+    
+    // O(1) Fast lookup tables by number
+    private var hymnsByNumber: [Int: Hymn] = [:]
+    private var keerthanesByNumber: [Int: Hymn] = [:]
+    private var mtHymnsByNumber: [Int: Hymn] = [:]
     
     private init() {
         loadAllData()
@@ -27,7 +30,6 @@ public final class WatchDataLoader: ObservableObject {
         loadHymns()
         loadKeerthanes()
         loadMtHymns()
-        loadLiturgies()
         isLoaded = true
     }
     
@@ -50,11 +52,17 @@ public final class WatchDataLoader: ObservableObject {
         }
         do {
             let items = try JSONDecoder().decode([Hymn].self, from: data)
-            self.hymns = items.map {
+            let sorted = items.map {
                 var h = $0
                 h.type = "hymn"
                 return h
             }.sorted { $0.number < $1.number }
+            self.hymns = sorted
+            
+            var dict: [Int: Hymn] = [:]
+            dict.reserveCapacity(sorted.count)
+            for h in sorted { dict[h.number] = h }
+            self.hymnsByNumber = dict
         } catch {
             print("WatchDataLoader: Error decoding hymns: \(error)")
         }
@@ -67,11 +75,17 @@ public final class WatchDataLoader: ObservableObject {
         }
         do {
             let items = try JSONDecoder().decode([Hymn].self, from: data)
-            self.keerthanes = items.map {
+            let sorted = items.map {
                 var h = $0
                 h.type = "keerthane"
                 return h
             }.sorted { $0.number < $1.number }
+            self.keerthanes = sorted
+            
+            var dict: [Int: Hymn] = [:]
+            dict.reserveCapacity(sorted.count)
+            for h in sorted { dict[h.number] = h }
+            self.keerthanesByNumber = dict
         } catch {
             print("WatchDataLoader: Error decoding keerthanes: \(error)")
         }
@@ -84,69 +98,57 @@ public final class WatchDataLoader: ObservableObject {
         }
         do {
             let items = try JSONDecoder().decode([Hymn].self, from: data)
-            self.mtHymns = items.map {
+            let sorted = items.map {
                 var h = $0
                 h.type = "mt"
                 return h
             }.sorted { $0.number < $1.number }
+            self.mtHymns = sorted
+            
+            var dict: [Int: Hymn] = [:]
+            dict.reserveCapacity(sorted.count)
+            for h in sorted { dict[h.number] = h }
+            self.mtHymnsByNumber = dict
         } catch {
             print("WatchDataLoader: Error decoding MT hymns: \(error)")
         }
     }
     
-    private func loadLiturgies() {
-        guard let data = loadDataAsset(name: "order_of_service_data") else {
-            print("WatchDataLoader: Failed to find order_of_service_data")
-            return
-        }
-        do {
-            if let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                var pages: [OrderPage] = []
-                if let pagesArr = root["pages"] as? [[String: Any]] {
-                    for p in pagesArr {
-                        let pageNo = p["page_no"] as? Int ?? 0
-                        let title = p["title"] as? String
-                        let content = p["content"] as? String ?? ""
-                        let type = p["type"] as? String ?? "regular"
-                        pages.append(OrderPage(pageNo: pageNo, title: title, content: content, type: type))
-                    }
-                }
-                self.regularLiturgies = pages.filter { $0.type == "regular" }.sorted { $0.pageNo < $1.pageNo }
-                self.festivalLiturgies = pages.filter { $0.type == "festival" }.sorted { $0.pageNo < $1.pageNo }
-            }
-        } catch {
-            print("WatchDataLoader: Error decoding order of service: \(error)")
+    // MARK: - Direct Fast Access
+    
+    public func songs(for type: String) -> [Hymn] {
+        switch type {
+        case "keerthane": return keerthanes
+        case "mt": return mtHymns
+        default: return hymns
         }
     }
-    
-    // MARK: - Search & Lookup
     
     public func song(type: String, number: Int) -> Hymn? {
         switch type {
         case "keerthane":
-            return keerthanes.first { $0.number == number }
+            return keerthanesByNumber[number]
         case "mt":
-            return mtHymns.first { $0.number == number }
+            return mtHymnsByNumber[number]
         default:
-            return hymns.first { $0.number == number }
+            return hymnsByNumber[number]
         }
     }
     
     public func search(query: String, in type: String) -> [Hymn] {
-        let source: [Hymn]
-        switch type {
-        case "keerthane": source = keerthanes
-        case "mt": source = mtHymns
-        default: source = hymns
-        }
-        
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty { return source }
+        if trimmed.isEmpty {
+            return songs(for: type)
+        }
         
         if let num = Int(trimmed) {
-            return source.filter { $0.number == num }
+            if let found = song(type: type, number: num) {
+                return [found]
+            }
+            return []
         }
         
+        let source = songs(for: type)
         let lower = trimmed.lowercased()
         return source.filter {
             $0.title.localizedCaseInsensitiveContains(lower) ||

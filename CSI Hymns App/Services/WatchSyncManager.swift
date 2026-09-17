@@ -58,10 +58,20 @@ public final class WatchSyncManager: NSObject, ObservableObject, WCSessionDelega
         handleIncomingData(userInfo)
     }
     
+    public func session(_ session: WCSession, didReceiveMessage message: [String : Any]) {
+        handleIncomingData(message)
+    }
+    
     private func handleIncomingData(_ dict: [String: Any]) {
         if let favs = dict["favorites_from_watch"] as? [String] {
             print("WatchSyncManager: Received favorites update from watch: \(favs.count) items")
             // Can be bridged into FavoritesManager if needed
+        }
+        
+        if let action = dict["action"] as? String, action == "open_order_of_service" {
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: Notification.Name("OpenOrderOfServiceRequested"), object: nil)
+            }
         }
     }
     

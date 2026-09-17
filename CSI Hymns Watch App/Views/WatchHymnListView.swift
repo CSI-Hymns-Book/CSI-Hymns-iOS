@@ -5,7 +5,7 @@ public struct WatchHymnListView: View {
     public let title: String
     public let type: String // hymn, keerthane, mt
     
-    @StateObject private var dataLoader = WatchDataLoader.shared
+    @ObservedObject private var dataLoader = WatchDataLoader.shared
     @State private var searchText: String = ""
     
     public init(title: String, type: String) {
@@ -14,7 +14,10 @@ public struct WatchHymnListView: View {
     }
     
     private var filteredSongs: [Hymn] {
-        dataLoader.search(query: searchText, in: type)
+        if searchText.isEmpty {
+            return dataLoader.songs(for: type)
+        }
+        return dataLoader.search(query: searchText, in: type)
     }
     
     public var body: some View {
@@ -44,8 +47,8 @@ public struct WatchHymnListView: View {
                                     .font(.system(size: 12, weight: .semibold))
                                     .lineLimit(1)
                                 
-                                if !song.lyricsKannada.isEmpty {
-                                    Text(firstLine(of: song.lyricsKannada))
+                                if !song.firstLineKannada.isEmpty {
+                                    Text(song.firstLineKannada)
                                         .font(.system(size: 10))
                                         .foregroundColor(.secondary)
                                         .lineLimit(1)
@@ -60,11 +63,5 @@ public struct WatchHymnListView: View {
         .searchable(text: $searchText, prompt: "Search # or title")
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
-    }
-    
-    private func firstLine(of text: String) -> String {
-        text.components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .first(where: { !$0.isEmpty }) ?? ""
     }
 }

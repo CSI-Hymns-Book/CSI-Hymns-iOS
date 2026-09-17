@@ -1,46 +1,26 @@
 import SwiftUI
 
 /// Premium, high-legibility stanza reader designed specifically for Apple Watch display.
+/// Uses LazyVStack and pre-parsed stanzas for instantaneous 0ms presentation.
 public struct WatchHymnReaderView: View {
     public let hymn: Hymn
     
-    @StateObject private var favStore = WatchFavoritesStore.shared
-    @StateObject private var setlistStore = WatchSetlistStore.shared
+    @ObservedObject private var favStore = WatchFavoritesStore.shared
+    @ObservedObject private var setlistStore = WatchSetlistStore.shared
     @AppStorage("watch_lyrics_lang") private var lyricsLanguage: String = "kannada" // "kannada", "english", "both"
     @AppStorage("watch_font_size") private var fontSize: Double = 16.0
-    @State private var crownAccumulator: CGFloat = 0.0
-    @State private var showingOptions = false
+    
+    private var maxStanzaCount: Int {
+        max(hymn.stanzasKannada.count, hymn.stanzasEnglish.count, 1)
+    }
     
     public init(hymn: Hymn) {
         self.hymn = hymn
     }
     
-    private var stanzasKannada: [String] {
-        splitStanzas(hymn.lyricsKannada)
-    }
-    
-    private var stanzasEnglish: [String] {
-        splitStanzas(hymn.lyricsEnglish)
-    }
-    
-    private func splitStanzas(_ raw: String) -> [String] {
-        let cleaned = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if cleaned.isEmpty { return [] }
-        
-        let parts = cleaned.components(separatedBy: "\n\n")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        
-        return parts.isEmpty ? [cleaned] : parts
-    }
-    
-    private var maxStanzaCount: Int {
-        max(stanzasKannada.count, stanzasEnglish.count, 1)
-    }
-    
     public var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
+            LazyVStack(alignment: .leading, spacing: 10) {
                 // Header card
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
@@ -65,11 +45,11 @@ public struct WatchHymnReaderView: View {
                         .lineLimit(2)
                         .minimumScaleFactor(0.85)
                 }
-                .padding(.bottom, 4)
+                .padding(.bottom, 2)
                 
                 Divider()
                 
-                // Stanzas
+                // Stanzas (Lazy evaluated for instant opening)
                 ForEach(0..<maxStanzaCount, id: \.self) { idx in
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
@@ -80,16 +60,16 @@ public struct WatchHymnReaderView: View {
                         }
                         
                         // Kannada text
-                        if (lyricsLanguage == "kannada" || lyricsLanguage == "both") && idx < stanzasKannada.count {
-                            Text(stanzasKannada[idx])
+                        if (lyricsLanguage == "kannada" || lyricsLanguage == "both") && idx < hymn.stanzasKannada.count {
+                            Text(hymn.stanzasKannada[idx])
                                 .font(.system(size: fontSize, weight: .medium))
                                 .lineSpacing(4)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         
                         // English text
-                        if (lyricsLanguage == "english" || lyricsLanguage == "both") && idx < stanzasEnglish.count {
-                            Text(stanzasEnglish[idx])
+                        if (lyricsLanguage == "english" || lyricsLanguage == "both") && idx < hymn.stanzasEnglish.count {
+                            Text(hymn.stanzasEnglish[idx])
                                 .font(.system(size: fontSize - 1, weight: .regular))
                                 .foregroundColor(lyricsLanguage == "both" ? .secondary : .primary)
                                 .lineSpacing(3)

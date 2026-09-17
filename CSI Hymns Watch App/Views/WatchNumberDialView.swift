@@ -2,10 +2,10 @@ import SwiftUI
 
 /// Fast rotary number dialer for Apple Watch allowing users to roll to a song number via Digital Crown.
 public struct WatchNumberDialView: View {
-    @StateObject private var dataLoader = WatchDataLoader.shared
+    @ObservedObject private var dataLoader = WatchDataLoader.shared
     @State private var songType: String = "hymn" // hymn, keerthane, mt
     @State private var selectedNumber: Double = 1.0
-    @State private var navigateToSong: Hymn? = nil
+    @FocusState private var isCrownFocused: Bool
     
     private var maxNumber: Double {
         switch songType {
@@ -20,116 +20,129 @@ public struct WatchNumberDialView: View {
     }
     
     public var body: some View {
-        VStack(spacing: 8) {
-            // Type Selector
-            HStack(spacing: 4) {
-                Button {
-                    songType = "hymn"
-                    if selectedNumber > 500 { selectedNumber = 500 }
-                } label: {
-                    Text("Hymn")
-                        .font(.system(size: 11, weight: songType == "hymn" ? .bold : .regular))
-                        .frame(maxWidth: .infinity)
+        ScrollView {
+            VStack(spacing: 10) {
+                // Book Segmented Selector with clean safe spacing
+                HStack(spacing: 3) {
+                    typeTabButton(title: "Hymn", type: "hymn", maxNum: 500)
+                    typeTabButton(title: "Keer", type: "keerthane", maxNum: 250)
+                    typeTabButton(title: "M.T.", type: "mt", maxNum: 350)
                 }
-                .tint(songType == "hymn" ? .accentColor : .gray.opacity(0.3))
+                .padding(3)
+                .background(Color.white.opacity(0.1))
+                .clipShape(Capsule())
+                .padding(.top, 2)
                 
-                Button {
-                    songType = "keerthane"
-                    if selectedNumber > 250 { selectedNumber = 250 }
-                } label: {
-                    Text("Keer")
-                        .font(.system(size: 11, weight: songType == "keerthane" ? .bold : .regular))
-                        .frame(maxWidth: .infinity)
+                // Digital Crown-Interactive Number Card
+                VStack(spacing: 4) {
+                    Text("#\(Int(selectedNumber))")
+                        .font(.system(size: 42, weight: .bold, design: .rounded))
+                        .foregroundColor(.accentColor)
+                    
+                    if let song = currentSong {
+                        Text(song.title)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.primary)
+                            .lineLimit(1)
+                            .padding(.horizontal, 6)
+                    } else {
+                        Text("Rotate Digital Crown")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                    }
                 }
-                .tint(songType == "keerthane" ? .accentColor : .gray.opacity(0.3))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.white.opacity(0.08))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(isCrownFocused ? Color.accentColor.opacity(0.6) : Color.clear, lineWidth: 1.5)
+                        )
+                )
+                .focusable()
+                .focused($isCrownFocused)
+                .digitalCrownRotation(
+                    $selectedNumber,
+                    from: 1.0,
+                    through: maxNumber,
+                    by: 1.0,
+                    sensitivity: .medium,
+                    isContinuous: false,
+                    isHapticFeedbackEnabled: true
+                )
                 
-                Button {
-                    songType = "mt"
-                    if selectedNumber > 350 { selectedNumber = 350 }
-                } label: {
-                    Text("M.T.")
-                        .font(.system(size: 11, weight: songType == "mt" ? .bold : .regular))
-                        .frame(maxWidth: .infinity)
+                // Step Jump Buttons (-10, -1, +1, +10)
+                HStack(spacing: 5) {
+                    stepButton("-10", delta: -10)
+                    stepButton("-1", delta: -1)
+                    stepButton("+1", delta: 1)
+                    stepButton("+10", delta: 10)
                 }
-                .tint(songType == "mt" ? .accentColor : .gray.opacity(0.3))
-            }
-            
-            // Large Crown-Interactive Number
-            VStack(spacing: 2) {
-                Text("#\(Int(selectedNumber))")
-                    .font(.system(size: 38, weight: .bold, design: .rounded))
-                    .foregroundColor(.accentColor)
-                    .focusable()
-                    .digitalCrownRotation(
-                        $selectedNumber,
-                        from: 1.0,
-                        through: maxNumber,
-                        by: 1.0,
-                        sensitivity: .medium,
-                        isContinuous: false,
-                        isHapticFeedbackEnabled: true
-                    )
                 
+                // Jump to song button
                 if let song = currentSong {
-                    Text(song.title)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                        .padding(.horizontal, 4)
-                } else {
-                    Text("Rotate Crown to change")
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 4)
-            .background(Color.white.opacity(0.06))
-            .cornerRadius(10)
-            
-            // Step buttons (-5, -1, +1, +5)
-            HStack(spacing: 6) {
-                Button("-10") {
-                    selectedNumber = max(1.0, selectedNumber - 10)
-                }
-                .buttonStyle(.bordered)
-                .font(.system(size: 11, weight: .bold))
-                
-                Button("-1") {
-                    selectedNumber = max(1.0, selectedNumber - 1)
-                }
-                .buttonStyle(.bordered)
-                .font(.system(size: 11, weight: .bold))
-                
-                Button("+1") {
-                    selectedNumber = min(maxNumber, selectedNumber + 1)
-                }
-                .buttonStyle(.bordered)
-                .font(.system(size: 11, weight: .bold))
-                
-                Button("+10") {
-                    selectedNumber = min(maxNumber, selectedNumber + 10)
-                }
-                .buttonStyle(.bordered)
-                .font(.system(size: 11, weight: .bold))
-            }
-            
-            // Jump to song button
-            if let song = currentSong {
-                NavigationLink(destination: WatchHymnReaderView(hymn: song)) {
-                    Text("Open #\(Int(selectedNumber))")
-                        .font(.system(size: 13, weight: .bold))
+                    NavigationLink(destination: WatchHymnReaderView(hymn: song)) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "book.pages.fill")
+                                .font(.system(size: 12))
+                            Text("Open #\(Int(selectedNumber))")
+                                .font(.system(size: 13, weight: .bold))
+                        }
                         .frame(maxWidth: .infinity)
+                    }
+                    .tint(.accentColor)
+                    .padding(.top, 2)
+                } else {
+                    Text("Song #\(Int(selectedNumber)) not available")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                        .padding(.vertical, 4)
                 }
-                .tint(.accentColor)
-            } else {
-                Text("Song not found")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
             }
+            .padding(.horizontal, 8)
+            .padding(.bottom, 6)
         }
-        .padding(.horizontal, 6)
         .navigationTitle("Quick Dial")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            isCrownFocused = true
+        }
+    }
+    
+    @ViewBuilder
+    private func typeTabButton(title: String, type: String, maxNum: Double) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                songType = type
+                if selectedNumber > maxNum { selectedNumber = maxNum }
+            }
+        } label: {
+            Text(title)
+                .font(.system(size: 11, weight: songType == type ? .bold : .medium))
+                .foregroundColor(songType == type ? .black : .white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 5)
+                .background(songType == type ? Color.accentColor : Color.clear)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+    
+    @ViewBuilder
+    private func stepButton(_ label: String, delta: Double) -> some View {
+        Button {
+            let nextVal = selectedNumber + delta
+            selectedNumber = min(max(1.0, nextVal), maxNumber)
+        } label: {
+            Text(label)
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+                .background(Color.white.opacity(0.12))
+                .cornerRadius(6)
+        }
+        .buttonStyle(.plain)
     }
 }

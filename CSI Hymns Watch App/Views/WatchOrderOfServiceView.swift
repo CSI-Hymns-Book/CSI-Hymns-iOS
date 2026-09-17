@@ -1,116 +1,91 @@
 import SwiftUI
+#if canImport(WatchKit)
+import WatchKit
+#endif
 
-/// Liturgy browser for Apple Watch displaying Order of Service with highlighted congregation responses.
+/// Informational handoff view for Apple Watch directing users to view the Order of Service on their iPhone.
 public struct WatchOrderOfServiceView: View {
-    @StateObject private var dataLoader = WatchDataLoader.shared
-    @State private var serviceType: String = "regular" // "regular" or "festival"
+    @ObservedObject private var connectivity = WatchConnectivityService.shared
+    @State private var didSendSignal = false
     
-    private var pages: [OrderPage] {
-        serviceType == "regular" ? dataLoader.regularLiturgies : dataLoader.festivalLiturgies
-    }
-    
-    public var body: some View {
-        List {
-            HStack(spacing: 6) {
-                Button {
-                    serviceType = "regular"
-                } label: {
-                    Text("Regular")
-                        .font(.system(size: 11, weight: serviceType == "regular" ? .bold : .regular))
-                        .frame(maxWidth: .infinity)
-                }
-                .tint(serviceType == "regular" ? .accentColor : .gray.opacity(0.3))
-                
-                Button {
-                    serviceType = "festival"
-                } label: {
-                    Text("Festival")
-                        .font(.system(size: 11, weight: serviceType == "festival" ? .bold : .regular))
-                        .frame(maxWidth: .infinity)
-                }
-                .tint(serviceType == "festival" ? .accentColor : .gray.opacity(0.3))
-            }
-            .listRowBackground(Color.clear)
-            
-            if pages.isEmpty {
-                Text("Loading liturgy...")
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
-            } else {
-                ForEach(pages) { page in
-                    NavigationLink(destination: WatchOrderPageDetailView(page: page)) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack {
-                                Text("Page \(page.pageNo)")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(.accentColor)
-                                Spacer()
-                            }
-                            
-                            Text(page.title ?? "Liturgy Section \(page.pageNo)")
-                                .font(.system(size: 12, weight: .semibold))
-                                .lineLimit(2)
-                        }
-                        .padding(.vertical, 2)
-                    }
-                }
-            }
-        }
-        .navigationTitle("Order of Service")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
-/// Liturgy page detail view on Apple Watch with responsive text styling.
-public struct WatchOrderPageDetailView: View {
-    public let page: OrderPage
-    @AppStorage("watch_font_size") private var fontSize: Double = 16.0
-    
-    public init(page: OrderPage) {
-        self.page = page
-    }
+    public init() {}
     
     public var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                if let title = page.title {
-                    Text(title)
-                        .font(.system(size: fontSize + 1, weight: .bold))
-                        .foregroundColor(.accentColor)
-                        .padding(.bottom, 2)
+            VStack(spacing: 12) {
+                // iPhone Icon with glowing accent ring
+                ZStack {
+                    Circle()
+                        .fill(Color.green.opacity(0.15))
+                        .frame(width: 52, height: 52)
                     
-                    Divider()
+                    Image(systemName: "iphone.gen3")
+                        .font(.system(size: 26, weight: .semibold))
+                        .foregroundColor(.green)
+                }
+                .padding(.top, 4)
+                
+                // Title and Subtitle
+                VStack(spacing: 2) {
+                    Text("Open on iPhone")
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundColor(.primary)
+                    
+                    Text("ಆರಾಧನಾ ಕ್ರಮ · Liturgy")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
                 }
                 
-                // Content with highlighted responses
-                ForEach(splitParagraphs(page.content), id: \.self) { paragraph in
-                    let isResponse = paragraph.hasPrefix("ಸಭೆ:") ||
-                                     paragraph.hasPrefix("ಸಭೆ :") ||
-                                     paragraph.hasPrefix("People:") ||
-                                     paragraph.hasPrefix("Congregation:")
-                    
-                    Text(paragraph)
-                        .font(.system(
-                            size: isResponse ? fontSize : fontSize - 1,
-                            weight: isResponse ? .bold : .regular
-                        ))
-                        .foregroundColor(isResponse ? .accentColor : .primary)
-                        .lineSpacing(3)
-                        .padding(isResponse ? 6 : 0)
-                        .background(isResponse ? Color.accentColor.opacity(0.12) : Color.clear)
-                        .cornerRadius(6)
+                // Informational Card
+                Text("The full Order of Service and responsive congregational readings are formatted for your iPhone display.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(2)
+                    .padding(.horizontal, 4)
+                
+                // Quick Action / Signal button
+                Button {
+                    #if canImport(WatchKit)
+                    WKInterfaceDevice.current().play(.click)
+                    #endif
+                    connectivity.notifyPhoneToOpenOrderOfService()
+                    withAnimation {
+                        didSendSignal = true
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                        withAnimation {
+                            didSendSignal = false
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: didSendSignal ? "checkmark.circle.fill" : "arrow.up.forward.app")
+                            .font(.system(size: 12, weight: .bold))
+                        Text(didSendSignal ? "Sent to iPhone" : "Notify iPhone")
+                            .font(.system(size: 12, weight: .bold))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
                 }
+                .tint(didSendSignal ? .green : .accentColor)
+                
+                // Connection Indicator
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(connectivity.isReachable ? Color.green : Color.orange)
+                        .frame(width: 6, height: 6)
+                    
+                    Text(connectivity.isReachable ? "iPhone is active" : "Open CSI Hymns on iPhone")
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary)
+                }
+                .padding(.top, 2)
             }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 4)
+            .padding(.horizontal, 8)
+            .padding(.bottom, 8)
         }
-        .navigationTitle("Page \(page.pageNo)")
+        .navigationTitle("Order of Service")
         .navigationBarTitleDisplayMode(.inline)
-    }
-    
-    private func splitParagraphs(_ text: String) -> [String] {
-        text.components(separatedBy: "\n\n")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
     }
 }
