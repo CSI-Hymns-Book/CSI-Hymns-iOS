@@ -17,7 +17,7 @@ Native **SwiftUI** app for the Kannada CSI Hymns & Keerthane lyrics book. Built 
 |---|---|
 | **Platform** | iOS 26+ (iPhone, iPad, visionOS) |
 | **Bundle ID** | `com.reyzie.hymns` |
-| **Version** | 6.0.0 (build 30) |
+| **Version** | 6.0.0 (build 31) |
 | **Language** | Swift 5 · SwiftUI |
 | **Backend** | [Supabase](https://supabase.com) |
 
