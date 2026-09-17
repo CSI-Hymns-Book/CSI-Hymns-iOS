@@ -9,7 +9,7 @@ Native **SwiftUI** app for the Kannada CSI Hymns & Keerthane lyrics book. Built 
   <img src="https://img.shields.io/badge/iOS-26+-007AFF?style=for-the-badge&logo=apple&logoColor=white" alt="iOS 26+" />
   <img src="https://img.shields.io/badge/Swift-5-F05138?style=for-the-badge&logo=swift&logoColor=white" alt="Swift 5" />
   <img src="https://img.shields.io/badge/SwiftUI-✓-007AFF?style=for-the-badge&logo=swift&logoColor=white" alt="SwiftUI" />
-  <img src="https://img.shields.io/badge/Version-5.1.0-blue?style=for-the-badge" alt="Version 5.1.0" />
+  <img src="https://img.shields.io/badge/Version-6.0.0-blue?style=for-the-badge" alt="Version 6.0.0" />
   <img src="https://img.shields.io/badge/License-Proprietary-lightgrey?style=for-the-badge" alt="License" />
 </p>
 
@@ -17,7 +17,7 @@ Native **SwiftUI** app for the Kannada CSI Hymns & Keerthane lyrics book. Built 
 |---|---|
 | **Platform** | iOS 26+ (iPhone, iPad, visionOS) |
 | **Bundle ID** | `com.reyzie.hymns` |
-| **Version** | 5.1.0 (build 29) |
+| **Version** | 6.0.0 (build 30) |
 | **Language** | Swift 5 · SwiftUI |
 | **Backend** | [Supabase](https://supabase.com) |
 

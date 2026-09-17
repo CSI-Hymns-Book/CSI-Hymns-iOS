@@ -29,6 +29,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             }
         }
 
+        WatchSyncManager.shared.activateSession()
+
         return true
     }
 

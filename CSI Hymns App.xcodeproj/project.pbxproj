@@ -10,10 +10,36 @@
 		F58F5A412FB9AE3100861475 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = F58F5A402FB9AE3100861475 /* Supabase */; };
 		F58F5A512FB9AE3100861475 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = F58F5A502FB9AE3100861475 /* FirebaseCore */; };
 		F58F5A612FB9AE3100861475 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = F58F5A622FB9AE3100861475 /* FirebaseMessaging */; };
+		F58F5B012FB9AE3100861475 /* CSI Hymns Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = F58F5B022FB9AE3100861475 /* CSI Hymns Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		F58F5B032FB9AE3100861475 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F58F598D2FB9AA2800861475 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F58F5B042FB9AE3100861475;
+			remoteInfo = "CSI Hymns Watch App";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		F58F5B052FB9AE3100861475 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				F58F5B012FB9AE3100861475 /* CSI Hymns Watch App.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		F58F59952FB9AA2800861475 /* CSI Hymns App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "CSI Hymns App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		F58F5B022FB9AE3100861475 /* CSI Hymns Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "CSI Hymns Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -35,6 +61,11 @@
 			path = "CSI Hymns App";
 			sourceTree = "<group>";
 		};
+		F58F5B062FB9AE3100861475 /* CSI Hymns Watch App */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "CSI Hymns Watch App";
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -48,12 +79,20 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F58F5B072FB9AE3100861475 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		F58F598C2FB9AA2800861475 = {
 			isa = PBXGroup;
 			children = (
+				F58F5B062FB9AE3100861475 /* CSI Hymns Watch App */,
 				F58F59972FB9AA2800861475 /* CSI Hymns App */,
 				F58F59962FB9AA2800861475 /* Products */,
 			);
@@ -62,6 +101,7 @@
 		F58F59962FB9AA2800861475 /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				F58F5B022FB9AE3100861475 /* CSI Hymns Watch App.app */,
 				F58F59952FB9AA2800861475 /* CSI Hymns App.app */,
 			);
 			name = Products;
@@ -74,6 +114,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = F58F59A02FB9AA2A00861475 /* Build configuration list for PBXNativeTarget "CSI Hymns App" */;
 			buildPhases = (
+				F58F5B052FB9AE3100861475 /* Embed Watch Content */,
 				F58F59912FB9AA2800861475 /* Sources */,
 				F58F59922FB9AA2800861475 /* Frameworks */,
 				F58F59932FB9AA2800861475 /* Resources */,
@@ -81,6 +122,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				F58F5B082FB9AE3100861475 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				F58F59972FB9AA2800861475 /* CSI Hymns App */,
@@ -93,6 +135,26 @@
 			);
 			productName = "CSI Hymns App";
 			productReference = F58F59952FB9AA2800861475 /* CSI Hymns App.app */;
+			productType = "com.apple.product-type.application";
+		};
+		F58F5B042FB9AE3100861475 /* CSI Hymns Watch App */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F58F5B092FB9AE3100861475 /* Build configuration list for PBXNativeTarget "CSI Hymns Watch App" */;
+			buildPhases = (
+				F58F5B0A2FB9AE3100861475 /* Sources */,
+				F58F5B072FB9AE3100861475 /* Frameworks */,
+				F58F5B0B2FB9AE3100861475 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				F58F5B062FB9AE3100861475 /* CSI Hymns Watch App */,
+			);
+			name = "CSI Hymns Watch App";
+			productName = "CSI Hymns Watch App";
+			productReference = F58F5B022FB9AE3100861475 /* CSI Hymns Watch App.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -112,6 +174,9 @@
 								enabled = 1;
 							};
 						};
+					};
+					F58F5B042FB9AE3100861475 = {
+						CreatedOnToolsVersion = 26.0.1;
 					};
 				};
 			};
@@ -133,6 +198,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				F58F5B042FB9AE3100861475 /* CSI Hymns Watch App */,
 				F58F59942FB9AA2800861475 /* CSI Hymns App */,
 			);
 		};
@@ -140,6 +206,13 @@
 
 /* Begin PBXResourcesBuildPhase section */
 		F58F59932FB9AA2800861475 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F58F5B0B2FB9AE3100861475 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -156,7 +229,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F58F5B0A2FB9AE3100861475 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		F58F5B082FB9AE3100861475 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F58F5B042FB9AE3100861475 /* CSI Hymns Watch App */;
+			targetProxy = F58F5B032FB9AE3100861475 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		F58F599E2FB9AA2A00861475 /* Debug */ = {
@@ -283,7 +371,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = "CSI Hymns App/CSI Hymns App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 29;
+				CURRENT_PROJECT_VERSION = 30;
 				DEVELOPMENT_TEAM = 6854RXDB8K;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -307,7 +395,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 5.1.0;
+				MARKETING_VERSION = 6.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.reyzie.hymns;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -332,7 +420,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = "CSI Hymns App/CSI Hymns App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 29;
+				CURRENT_PROJECT_VERSION = 30;
 				DEVELOPMENT_TEAM = 6854RXDB8K;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -357,7 +445,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 5.1.0;
+				MARKETING_VERSION = 6.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.reyzie.hymns;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -371,6 +459,76 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
 				XROS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Release;
+		};
+		F58F5B0C2FB9AE3100861475 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 30;
+				DEVELOPMENT_TEAM = 6854RXDB8K;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "CSI Hymns";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.reyzie.hymns;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 6.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.reyzie.hymns.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		F58F5B0D2FB9AE3100861475 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 30;
+				DEVELOPMENT_TEAM = 6854RXDB8K;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "CSI Hymns";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.reyzie.hymns;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 6.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.reyzie.hymns.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
 			};
 			name = Release;
 		};
@@ -391,6 +549,15 @@
 			buildConfigurations = (
 				F58F59A12FB9AA2A00861475 /* Debug */,
 				F58F59A22FB9AA2A00861475 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F58F5B092FB9AE3100861475 /* Build configuration list for PBXNativeTarget "CSI Hymns Watch App" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F58F5B0C2FB9AE3100861475 /* Debug */,
+				F58F5B0D2FB9AE3100861475 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

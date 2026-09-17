@@ -103,6 +103,7 @@ public final class FavoritesManager {
         if let encoded = try? JSONEncoder().encode(favorites) {
             UserDefaults.standard.set(encoded, forKey: storageKey)
         }
+        WatchSyncManager.shared.syncFavorites(ids: favoriteIds)
     }
     
     public func getHymnFromCache(number: Int, type: String) -> Hymn? {
