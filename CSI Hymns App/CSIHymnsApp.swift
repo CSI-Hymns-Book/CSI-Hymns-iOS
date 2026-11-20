@@ -40,13 +40,16 @@ struct CSIHymnsApp: App {
     
     private func fallbackRelease() -> ChangelogRelease {
         return ChangelogRelease(
-            title: "Correct Issue Reports, Presenter Tools & Privacy Wording 🛠️",
+            title: "Apple Watch, FCM Notifications, Privacy Controls, Presenter Tools & Correct Issue Reports ⌚🔔",
             version: "5.2.0",
             date: "20-11-2026",
             changes: [
-                "Issue reports now say which book the song is from, with your real app version",
+                "New Apple Watch companion app with offline lyrics & Sunday setlists",
+                "Push notifications now use Firebase Cloud Messaging (FCM)",
+                "Interactive Order of Service Table of Contents with page chips",
+                "DPDP privacy and data governance with account data export",
                 "Presenter tools for admins to project songs to FreeShow over Wi-Fi",
-                "Clearer first-launch consent wording on data protection"
+                "Issue reports now say which book the song is from, with your real app version"
             ]
         )
     }

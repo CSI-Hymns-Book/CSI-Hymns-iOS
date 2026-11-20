@@ -1,20 +1,8 @@
 [
     {
-        "title": "Correct Issue Reports, Presenter Tools & Privacy Wording 🛠️",
+        "title": "Apple Watch, FCM Notifications, Privacy Controls, Presenter Tools & Correct Issue Reports ⌚🔔",
         "version": "5.2.0",
         "date": "20-11-2026",
-        "changes": [
-            "FIX Issue reports now say which book the song is from, so M.T. Hymns, Keerthanes and Order of Service pages reach the team under the right name",
-            "FIX Reports now include your real app version, and Order of Service reports carry the page title",
-            "NEW Presenter tools for admins — project a hymn or keerthane to FreeShow over Wi-Fi, or share a FreeShow project file",
-            "IMPROVED First-launch consent wording on data protection",
-            "Thank you for using CSI Hymns! Share feedback or report issues directly from the hymn reader"
-        ]
-    },
-    {
-        "title": "Apple Watch Companion App, FCM Notifications, DPDP Privacy & Liturgies ⌚🔔",
-        "version": "6.0.0",
-        "date": "20-09-2026",
         "changes": [
             "NEW Apple Watch Companion App — browse hymns, keerthanes, and Mangalore Tunes offline directly from your wrist",
             "NEW WatchConnectivity Live Sync — seamlessly sync your Favorites and Sunday Setlist between iPhone and Apple Watch",
@@ -23,9 +11,13 @@
             "NEW Order of Service Interactive TOC — browse liturgy sections with selectable headings and direct page number chips",
             "NEW DPDP Privacy & Data Governance — clear consent gate on first launch, data export tools, and granular privacy controls",
             "NEW Persistent Audio Player — refined player chrome, persistent audio toolbar, and auto-hiding reader actions during playback",
+            "NEW Presenter tools for admins — project a hymn or keerthane to FreeShow over Wi-Fi, or share a FreeShow project file",
             "IMPROVED Privacy Consent Controls — in-app push notification opt-out now reliably persists across app cold starts and FCM token refreshes",
             "IMPROVED Cloud Collections & Recents — protected custom playlists from remote overwrite and fixed Mangalore Tunes recents tracking",
             "IMPROVED Supabase Backend Security — locked down public write permissions and secured configuration endpoints",
+            "IMPROVED First-launch consent wording on data protection",
+            "FIX Issue reports now say which book the song is from, so M.T. Hymns, Keerthanes and Order of Service pages reach the team under the right name",
+            "FIX Reports now include your real app version, and Order of Service reports carry the page title",
             "General stability improvements, navigation fixes, and smoother offline-first caching",
             "Thank you for using CSI Hymns! Share feedback or report issues directly from the hymn reader"
         ]
