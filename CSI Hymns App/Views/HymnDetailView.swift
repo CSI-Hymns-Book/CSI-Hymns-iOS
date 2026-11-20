@@ -106,6 +106,7 @@ public struct HymnDetailView: View {
     @State private var audioErrorMessage: String?
     @State private var forceOggPlayer = false
     @State private var showAudioContribution = false
+    @State private var showPresenterSheet = false
     @Environment(\.scenePhase) private var scenePhase
     
     public init(hymn: Hymn) {
@@ -255,6 +256,16 @@ public struct HymnDetailView: View {
                     
                     CastButton(tint: theme.textPrimary)
                     
+                    if PresenterMode.isAvailable {
+                        Button {
+                            showPresenterSheet = true
+                        } label: {
+                            Image(systemName: "rectangle.on.rectangle.angled")
+                                .foregroundColor(theme.textPrimary)
+                        }
+                        .accessibilityLabel("Presenter tools")
+                    }
+                    
                     Button {
                         viewModel.isShowingReportSheet = true
                     } label: {
@@ -279,6 +290,9 @@ public struct HymnDetailView: View {
         .toolbar(.hidden, for: .tabBar)
         .sheet(isPresented: $viewModel.isShowingReportSheet) {
             reportLyricsSheet
+        }
+        .sheet(isPresented: $showPresenterSheet) {
+            FreeShowPresenterSheet(hymn: hymn)
         }
         .sheet(isPresented: $showCastSheet) {
             CastControlSheet(songTitle: castSongTitle)
