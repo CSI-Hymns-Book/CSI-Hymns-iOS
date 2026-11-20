@@ -24,7 +24,7 @@ struct CSIHymnsApp: App {
             let releases = try JSONDecoder().decode([ChangelogRelease].self, from: data)
             
             // Find the release matching the current app version
-            let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "5.1.0"
+            let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "5.2.0"
             if let matched = releases.first(where: { $0.version == currentVersion }) {
                 return matched
             }
@@ -40,14 +40,13 @@ struct CSIHymnsApp: App {
     
     private func fallbackRelease() -> ChangelogRelease {
         return ChangelogRelease(
-            title: "New Public Stable Version Released!",
-            version: "5.1.0",
-            date: "13-07-2026",
+            title: "Correct Issue Reports, Presenter Tools & Privacy Wording 🛠️",
+            version: "5.2.0",
+            date: "20-11-2026",
             changes: [
-                "New Mangalore Tunes (M.T.) Hymns section",
-                "New MIDI Playback Engine with realistic instrument settings",
-                "Robust JSON parsing with safety nets",
-                "Admin Controls Dashboard with Supabase Sync"
+                "Issue reports now say which book the song is from, with your real app version",
+                "Presenter tools for admins to project songs to FreeShow over Wi-Fi",
+                "Clearer first-launch consent wording on data protection"
             ]
         )
     }
