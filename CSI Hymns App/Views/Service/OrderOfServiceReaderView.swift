@@ -664,17 +664,19 @@ public struct OrderOfServiceReaderView: View {
     }
     
     private func submitCorrectionReport() {
-        let pageNo = viewModel.pages[viewModel.currentPageIndex].pageNo
+        let page = viewModel.pages[viewModel.currentPageIndex]
+        let pageNo = page.pageNo
+        let pageTitle = (page.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let desc = reportDescription.trimmingCharacters(in: .whitespacesAndNewlines)
         
         Task {
             // Submit issue directly to Atlassian Jira Service
             let result = await JiraService.shared.createTicket(
-                songType: "Liturgy (\(type))",
+                songType: LyricsTicketType.forOrderOfService(type: type),
                 songNumber: pageNo,
-                songTitle: "Order of Service - Page \(pageNo)",
+                songTitle: pageTitle.isEmpty ? "Order of Service - Page \(pageNo)" : pageTitle,
                 description: desc,
-                appVersion: "1.0.0+1"
+                appVersion: JiraService.currentAppVersion
             )
             
             await MainActor.run {

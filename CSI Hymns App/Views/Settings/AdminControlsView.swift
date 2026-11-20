@@ -1216,6 +1216,7 @@ struct AdminConfigManagerView: View {
     @State private var isChristmasTime = false
     @State private var isMangaloreHymnsEnabled = true
     @State private var pageFlipVisible = true
+    @State private var presenterModeEnabled = false
     @State private var castEnabled = false
     @State private var castAppId = ""
     @State private var castReceiverUrl = ""
@@ -1253,6 +1254,7 @@ struct AdminConfigManagerView: View {
                 Toggle("Christmas Time Mode", isOn: $isChristmasTime)
                 Toggle("Mangalore Hymns Enabled", isOn: $isMangaloreHymnsEnabled)
                 Toggle("Page Flip View Visible", isOn: $pageFlipVisible)
+                Toggle("Presenter Mode (FreeShow export, admins only)", isOn: $presenterModeEnabled)
                 Toggle("Google Cast Support", isOn: $castEnabled)
                 TextField("Google Cast App ID", text: $castAppId)
                 TextField("Google Cast Receiver URL", text: $castReceiverUrl)
@@ -1356,6 +1358,7 @@ struct AdminConfigManagerView: View {
         isChristmasTime = dict["is_christmas_time"] as? Bool ?? false
         isMangaloreHymnsEnabled = dict["is_mangalore_hymns_enabled"] as? Bool ?? true
         pageFlipVisible = dict["page_flip_visible"] as? Bool ?? true
+        presenterModeEnabled = dict["presenter_mode_enabled"] as? Bool ?? false
         castEnabled = dict["cast_enabled"] as? Bool ?? false
         castAppId = dict["cast_app_id"] as? String ?? ""
         castReceiverUrl = dict["cast_receiver_url"] as? String ?? ""
@@ -1385,6 +1388,7 @@ struct AdminConfigManagerView: View {
             "is_christmas_time": isChristmasTime,
             "is_mangalore_hymns_enabled": isMangaloreHymnsEnabled,
             "page_flip_visible": pageFlipVisible,
+            "presenter_mode_enabled": presenterModeEnabled,
             "cast_enabled": castEnabled,
             "cast_app_id": castAppId,
             "cast_receiver_url": castReceiverUrl,

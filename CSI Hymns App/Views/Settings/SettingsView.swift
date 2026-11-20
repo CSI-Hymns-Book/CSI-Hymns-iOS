@@ -216,7 +216,8 @@ public struct SettingsView: View {
                 Section {
                     HStack {
                         Spacer()
-                        Text("CSI Hymns v5.1.0")
+                        let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "5.2.0"
+                        Text("CSI Hymns v\(appVersion)")
                             .font(.caption)
                             .foregroundColor(theme.textSecondary)
                             .onLongPressGesture(minimumDuration: 3.0) {

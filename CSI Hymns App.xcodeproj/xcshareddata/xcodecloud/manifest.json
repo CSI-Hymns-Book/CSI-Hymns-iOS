@@ -2,6 +2,10 @@
   "id" : "55eed420-daba-4e2e-aeb6-e338f313dcd5",
   "targets" : [
     {
+      "id" : "83fd0350-375f-4651-bafb-600f3895a198",
+      "name" : "CSI Hymns App"
+    },
+    {
       "id" : "FEEC0CBB-BC0E-4911-A60B-EB9EA7A2E869",
       "name" : "CSI Hymns Book"
     }
