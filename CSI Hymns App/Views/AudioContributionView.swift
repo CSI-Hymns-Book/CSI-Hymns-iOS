@@ -156,7 +156,7 @@ public struct AudioContributionView: View {
         statusMessage = "Uploading audio contribution..."
         didSucceed = false
         
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+        let version = JiraService.currentAppVersion
         let result = await JiraService.shared.createTicket(
             songType: songType,
             songNumber: songNumber,

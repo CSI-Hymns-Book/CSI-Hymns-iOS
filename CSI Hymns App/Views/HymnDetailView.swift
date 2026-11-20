@@ -50,11 +50,11 @@ public final class HymnDetailViewModel {
         isReportSubmitting = true
         
         let result = await JiraService.shared.createTicket(
-            songType: hymn.type.capitalized,
+            songType: LyricsTicketType.forSong(kind: hymn.type),
             songNumber: hymn.number,
             songTitle: hymn.title,
             description: reportDescription,
-            appVersion: "1.0.0+1"
+            appVersion: JiraService.currentAppVersion
         )
         
         if result.success {
@@ -286,7 +286,7 @@ public struct HymnDetailView: View {
         }
         .sheet(isPresented: $showAudioContribution) {
             AudioContributionView(
-                songType: hymn.type == "keerthane" ? "Keerthane" : (hymn.type == "mt" ? "M.T. Hymn" : "Hymn"),
+                songType: LyricsTicketType.forSong(kind: hymn.type),
                 songNumber: hymn.number,
                 songTitle: hymn.title
             ) {
