@@ -150,7 +150,7 @@ public struct OnboardingView: View {
 
                     Text(consent.language == .kannada
                          ? "CSI Hymns ಭಾರತ ಸರ್ಕಾರದ ದತ್ತಾಂಶ ಸಂರಕ್ಷಣಾ ಕಾನೂನುಗಳನ್ನು ಪಾಲಿಸುತ್ತದೆ. ನಿಮ್ಮ ಮಾಹಿತಿಯನ್ನು ಸುರಕ್ಷಿತವಾಗಿ ಇರಿಸಲಾಗುತ್ತದೆ."
-                         : "CSI Hymns complies with Indian government data protection laws. Your information is kept safe and secure.")
+                         : "CSI Hymns complies with Local Government Data Protection Laws. Your information is kept safe and secure.")
                         .font(.system(size: 17, weight: .medium))
                         .foregroundColor(.white.opacity(0.86))
                         .multilineTextAlignment(.center)
