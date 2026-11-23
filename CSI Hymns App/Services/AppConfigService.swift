@@ -30,6 +30,8 @@ public struct RemoteAppConfig: Sendable {
     public var paymentsEnabled: Bool?
     public var masterRootPasscode: String?
     public var presenterModeEnabled: Bool?
+    /// Bumped by an admin to make every device re-download MIDI tunes and the tune list.
+    public var midiRefreshVersion: String?
     
     public var parsedMidiHymns: Set<String> {
         Self.parseMeters(midiHymnsRanges)
@@ -108,6 +110,7 @@ public struct RemoteAppConfig: Sendable {
         merged.paymentsEnabled = paymentsEnabled ?? previous.paymentsEnabled
         merged.masterRootPasscode = masterRootPasscode ?? previous.masterRootPasscode
         merged.presenterModeEnabled = presenterModeEnabled ?? previous.presenterModeEnabled
+        merged.midiRefreshVersion = midiRefreshVersion ?? previous.midiRefreshVersion
         return merged
     }
 }
@@ -137,6 +140,7 @@ public enum AppConfigKeys {
     public static let paymentsEnabled = "payments_enabled"
     public static let presenterModeEnabled = "presenter_mode_enabled"
     public static let masterRootPasscode = "master_root_passcode"
+    public static let midiRefreshVersion = "midi_refresh_version"
 }
 
 @MainActor
@@ -181,7 +185,8 @@ public final class AppConfigService {
                 AppConfigKeys.isRazorpayEnabled,
                 AppConfigKeys.paymentsEnabled,
                 AppConfigKeys.masterRootPasscode,
-                AppConfigKeys.presenterModeEnabled
+                AppConfigKeys.presenterModeEnabled,
+                AppConfigKeys.midiRefreshVersion
             ]
             
             let rows: [AppConfigRow] = try await SupabaseService.instance.client
@@ -223,6 +228,7 @@ public final class AppConfigService {
             next.paymentsEnabled = dict[AppConfigKeys.paymentsEnabled]?.boolValue
             next.masterRootPasscode = nonEmpty(dict[AppConfigKeys.masterRootPasscode]?.stringValue)
             next.presenterModeEnabled = dict[AppConfigKeys.presenterModeEnabled]?.boolValue
+            next.midiRefreshVersion = nonEmpty(dict[AppConfigKeys.midiRefreshVersion]?.stringValue)
 
             let previous = config
             next = next.coalescing(previous)
@@ -250,6 +256,7 @@ public final class AppConfigService {
             UserDefaults.standard.set(next.midiKeerthanesRanges, forKey: "midi_keerthanes_ranges_cached")
             UserDefaults.standard.set(next.disableOggFallback, forKey: "disable_ogg_fallback_cached")
             UserDefaults.standard.set(next.audioBackupUrl, forKey: "audio_backup_url_cached")
+            UserDefaults.standard.set(next.midiRefreshVersion, forKey: "midi_refresh_version_cached")
         } catch {
             print("AppConfigService: refresh failed: \(error)")
         }
@@ -297,6 +304,7 @@ public final class AppConfigService {
         next.pageFlipVisible = dict["page_flip_visible"] as? Bool
         next.forceUpdateIosStoreUrl = dict["force_update_ios_store_url"] as? String
         next.presenterModeEnabled = dict["presenter_mode_enabled"] as? Bool
+        next.midiRefreshVersion = dict["midi_refresh_version"] as? String
         config = next
     }
     
@@ -316,6 +324,7 @@ public final class AppConfigService {
         if let v = config.pageFlipVisible { dict["page_flip_visible"] = v }
         if let v = config.forceUpdateIosStoreUrl { dict["force_update_ios_store_url"] = v }
         if let v = config.presenterModeEnabled { dict["presenter_mode_enabled"] = v }
+        if let v = config.midiRefreshVersion { dict["midi_refresh_version"] = v }
         if let data = try? JSONSerialization.data(withJSONObject: dict) {
             UserDefaults.standard.set(data, forKey: Self.cacheKey)
         }

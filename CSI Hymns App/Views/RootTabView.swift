@@ -10,6 +10,10 @@ public struct RootTabView: View {
     @State private var isShowingMenuShowcase = UserDefaults.standard.bool(forKey: "csi_pending_menu_showcase")
     private var navigationManager = AppNavigationService.shared
     @State private var activeAnnouncement: InAppMessage? = nil
+    @State private var showCarolsHandoff = false
+    @Environment(\.scenePhase) private var scenePhase
+    private let festive = FestiveAmbience.shared
+    private let handoff = CarolHandoff.shared
     
     public init() {}
     
@@ -17,12 +21,14 @@ public struct RootTabView: View {
         ZStack {
             if let activeSection = navigationManager.activeSection {
                 tabViewContent(for: activeSection)
-                    .transition(.asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .trailing)))
+                    .transition(christmasMode.isChristmasTime
+                        ? .festiveZoom
+                        : .asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .trailing)))
                     .zIndex(1)
             } else {
                 if christmasMode.isChristmasTime {
                     ChristmasLandingView(selectedTab: $selectedTab)
-                        .transition(.asymmetric(insertion: .move(edge: .leading), removal: .move(edge: .leading)))
+                        .transition(.festiveStay)
                         .zIndex(0)
                 } else {
                     HomeSelectorView(selectedTab: $selectedTab)
@@ -32,9 +38,13 @@ public struct RootTabView: View {
             }
             
             if christmasMode.isChristmasTime {
+                // Above the book screens (zIndex 1), or snow only falls on the home screen.
                 FestiveSnowfallOverlay()
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
+                    .zIndex(2)
+                FestiveToastHost()
+                    .zIndex(3)
             }
             
             if isShowingMenuShowcase {
@@ -177,6 +187,16 @@ public struct RootTabView: View {
                 .zIndex(100)
             }
         }
+        .modifier(FestiveRootModifier(isChristmas: christmasMode.isChristmasTime))
+        .onChange(of: scenePhase, initial: true) { _, phase in updateMotion(phase: phase) }
+        .onChange(of: christmasMode.isChristmasTime) { _, _ in updateMotion(phase: scenePhase) }
+        .onChange(of: handoff.openRequest) { _, _ in
+            // A partner app (YKC One) asked for the Carols book: close anything on top, show it.
+            showCarolsHandoff = true
+        }
+        .fullScreenCover(isPresented: $showCarolsHandoff) {
+            FestiveCarolsHandoffView(onClose: { showCarolsHandoff = false })
+        }
         .task {
             activeAnnouncement = await AnnouncementsService.shared.getActiveUndismissedBroadcast()
             await navigationManager.syncMangaloreFromConfig()
@@ -187,6 +207,15 @@ public struct RootTabView: View {
         }
     }
     
+    /// Tilt and shake are only listened to while the app is active and Christmas effects are on.
+    private func updateMotion(phase: ScenePhase) {
+        if phase == .active, christmasMode.isChristmasTime, festive.level != .off {
+            FestiveMotionService.shared.start()
+        } else {
+            FestiveMotionService.shared.stop()
+        }
+    }
+
     private func finishMenuShowcase() {
         isShowingMenuShowcase = false
         UserDefaults.standard.set(false, forKey: "csi_pending_menu_showcase")
@@ -302,9 +331,7 @@ public struct SwipeNavigationModifier: ViewModifier {
                         
                         // 1. Edge swipe from left -> pop back to home selector
                         if value.startLocation.x < 45 && horizontal > 70 {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                AppNavigationService.shared.activeSection = nil
-                            }
+                            BookNavigation.goHome()
                             return
                         }
                         
@@ -335,5 +362,18 @@ extension View {
     /// Enables swipe gesture tab navigation with horizontal velocity protection
     public func swipeToNavigate(selectedTab: Binding<Int>, maxTab: Int) -> some View {
         self.modifier(SwipeNavigationModifier(selectedTab: selectedTab, maxTab: maxTab))
+    }
+}
+
+/// Root-level Christmas behaviour: the tap catcher for Santa and drifting emoji, and the palette
+/// for every festive component below.
+private struct FestiveRootModifier: ViewModifier {
+    let isChristmas: Bool
+    func body(content: Content) -> some View {
+        if isChristmas {
+            FestivePaletteProvider { content.festiveTapCatcher() }
+        } else {
+            content
+        }
     }
 }

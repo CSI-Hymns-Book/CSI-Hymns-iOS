@@ -13,6 +13,8 @@ public final class MidiFileCatalog {
     
     private static let jsonKey = "cached_midi_files_json"
     private static let fingerprintKey = "cached_midi_files_fingerprint"
+    private static let fetchedAtKey = "cached_midi_files_at"
+    private static let listTTL: TimeInterval = 6 * 60 * 60
     
     private let fallbackList = [
         "c.m.refrain_wondrous_love.mid",
@@ -41,8 +43,11 @@ public final class MidiFileCatalog {
         let fingerprint = MidiFileCache.currentFingerprint()
         let storedFingerprint = UserDefaults.standard.string(forKey: Self.fingerprintKey)
         
+        let fetchedAt = UserDefaults.standard.double(forKey: Self.fetchedAtKey)
+        let isFresh = Date().timeIntervalSince1970 - fetchedAt < Self.listTTL
         if !force,
            fingerprint == storedFingerprint,
+           isFresh,
            let cached = loadCachedNames(),
            !cached.isEmpty {
             fileNames = cached
@@ -82,11 +87,21 @@ public final class MidiFileCatalog {
             if let json = String(data: data, encoding: .utf8) {
                 UserDefaults.standard.set(json, forKey: Self.jsonKey)
                 UserDefaults.standard.set(fingerprint, forKey: Self.fingerprintKey)
+                UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.fetchedAtKey)
             }
         } catch {
             lastError = error.localizedDescription
             if fileNames.isEmpty { fileNames = fallbackList }
         }
+    }
+    
+    /// Forgets the tune list (saved and in memory) so the next refresh downloads it again.
+    public func clearCache() {
+        let d = UserDefaults.standard
+        d.removeObject(forKey: Self.jsonKey)
+        d.removeObject(forKey: Self.fingerprintKey)
+        d.removeObject(forKey: Self.fetchedAtKey)
+        fileNames = fallbackList
     }
     
     public func hasMatchingFiles(for option: String, hymnNumber: Int) -> Bool {

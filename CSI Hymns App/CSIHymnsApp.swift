@@ -24,7 +24,7 @@ struct CSIHymnsApp: App {
             let releases = try JSONDecoder().decode([ChangelogRelease].self, from: data)
             
             // Find the release matching the current app version
-            let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "5.2.0"
+            let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "5.3.0"
             if let matched = releases.first(where: { $0.version == currentVersion }) {
                 return matched
             }
@@ -67,6 +67,10 @@ struct CSIHymnsApp: App {
                 } else {
                     RootTabView()
                         .preferredColorScheme(themeManager.preferredColorScheme)
+                        .onOpenURL { url in
+                            // csihymns://carols?from=<bundleId> from an allowlisted partner app (YKC One)
+                            CarolHandoff.shared.handle(url: url)
+                        }
                         .sheet(isPresented: $isShowingWelcome) {
                             WelcomeChangelogView(release: activeRelease) {
                                 isShowingWelcome = false

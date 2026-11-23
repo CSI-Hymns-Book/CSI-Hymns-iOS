@@ -13,6 +13,9 @@ struct CommonCategoryItem: Identifiable {
 /// A spectacular, high-fidelity categories browser for the native iOS app.
 /// Migrates both static common event categories and runtime custom collections, enforcing guest quotas.
 public struct CustomCategoriesView: View {
+    /// Read once when the screen opens: while it animates away after "Home" the section is
+    /// already cleared, and a live check would swap the toolbar mid-animation and jolt the list.
+    @State private var showsHomeButton = AppNavigationService.shared.activeSection != nil
     @Binding var selectedTab: Int
     @State private var theme = ThemeManager.shared
     @State private var viewModel = CustomCategoriesViewModel.shared
@@ -194,12 +197,10 @@ public struct CustomCategoriesView: View {
             .navigationBarTitleDisplayMode(.inline)
             .csiGlassNavigationBar(theme: theme)
             .toolbar {
-                if AppNavigationService.shared.activeSection != nil {
+                if showsHomeButton {
                     ToolbarItem(placement: .topBarLeading) {
                         Button(action: {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                AppNavigationService.shared.activeSection = nil
-                            }
+                            BookNavigation.goHome()
                         }) {
                             HStack(spacing: 3) {
                                 Image(systemName: "chevron.left")

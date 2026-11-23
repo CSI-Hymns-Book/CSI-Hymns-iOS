@@ -310,10 +310,16 @@ public final class HymnsListViewModel {
 
 /// A premium, glassmorphic view rendering the list of hymns, search filters, and sorting.
 public struct HymnsListView: View {
+    /// Read once when the screen opens: while it animates away after "Home" the section is
+    /// already cleared, and a live check would swap the toolbar mid-animation and jolt the list.
+    @State private var showsHomeButton = AppNavigationService.shared.activeSection != nil
     @Binding var selectedTab: Int
     @State private var theme = ThemeManager.shared
     @State private var viewModel: HymnsListViewModel
     @State private var isShowingJumpSheet = false
+    @Environment(\.colorScheme) private var colorScheme
+    private var festive: Bool { ChristmasModeService.shared.isChristmasTime }
+    private var palette: FestivePalette { .forScheme(colorScheme) }
     
     // Remote refresh alerts and HUD state
     @State private var isShowingRefreshConfirmAlert = false
@@ -350,10 +356,10 @@ public struct HymnsListView: View {
                     
                     ZStack {
                         // Deep gradient background conforming to dynamic aesthetics
-                        theme.backgroundColor
+                        (festive ? Color.clear : theme.backgroundColor)
                             .ignoresSafeArea()
                         
-                        if theme.activeTheme != .amoled {
+                        if !festive, theme.activeTheme != .amoled {
                             theme.backgroundGradient
                                 .ignoresSafeArea()
                         }
@@ -410,19 +416,26 @@ public struct HymnsListView: View {
                         // Glassmorphic forced non-blocking top HUD status toast
                         toastHUDView
                     }
+                    .festiveFrameIf(festive)
                 }
                 .ignoresSafeArea(.keyboard, edges: .bottom)
                 .navigationTitle(title)
                 .navigationBarTitleDisplayMode(.inline)
                 .csiGlassNavigationBar(theme: theme)
                 .toolbar {
+                    if festive {
+                        ToolbarItem(placement: .principal) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "star.fill").font(.system(size: 13)).foregroundStyle(palette.gold)
+                                Text(title).font(.festiveSerif(19, weight: .semibold)).foregroundStyle(palette.ink)
+                            }
+                        }
+                    }
                     ToolbarItem(placement: .topBarLeading) {
                         HStack(spacing: 12) {
-                            if AppNavigationService.shared.activeSection != nil {
+                            if showsHomeButton {
                                 Button {
-                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                        AppNavigationService.shared.activeSection = nil
-                                    }
+                                    BookNavigation.goHome()
                                 } label: {
                                     HStack(spacing: 3) {
                                         Image(systemName: "chevron.left")
@@ -530,7 +543,7 @@ public struct HymnsListView: View {
             }
         }
         .padding(12)
-        .csiGlassCard(cornerRadius: 16)
+        .modifier(SearchGlass(festive: festive))
     }
     
     private var filterChipsRow: some View {
@@ -709,7 +722,56 @@ public struct HymnsListView: View {
             .joined(separator: "\n")
     }
     
+    @ViewBuilder
     private func hymnCell(_ hymn: Hymn) -> some View {
+        if festive { festiveHymnCell(hymn) } else { classicHymnCell(hymn) }
+    }
+    
+    /// Christmas row: frosted glass with a snow cap that follows the corners, a badge, a serif
+    /// title and a gold signature label.
+    private func festiveHymnCell(_ hymn: Hymn) -> some View {
+        let symbol: String
+        switch viewModel.section {
+        case .hymns: symbol = "music.note"
+        case .keerthanes: symbol = "star.fill"
+        case .mt: symbol = "snowflake"
+        }
+        return NavigationLink(destination: HymnDetailView(hymn: hymn)) {
+            HStack(alignment: .center, spacing: 14) {
+                ZStack {
+                    Circle().fill(palette.gold.opacity(0.16)).frame(width: 44, height: 44)
+                    Circle().strokeBorder(palette.gold.opacity(0.55), lineWidth: 1).frame(width: 44, height: 44)
+                    Image(systemName: symbol).font(.system(size: 17, weight: .semibold)).foregroundStyle(palette.gold)
+                }
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("\(hymn.number). \(hymn.title)")
+                        .font(.festiveSerif(17, weight: .medium))
+                        .foregroundStyle(palette.ink)
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(2)
+                    if !hymn.signature.isEmpty {
+                        Text((hymn.type == "mt" ? "M.T. " : "") + formattedSignature(hymn.signature).replacingOccurrences(of: "\n", with: " · "))
+                            .font(.system(size: 11, weight: .bold))
+                            .tracking(0.8)
+                            .textCase(.uppercase)
+                            .foregroundStyle(palette.gold)
+                            .lineLimit(2)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(palette.inkMuted)
+            }
+            .padding(14)
+            .festiveGlass(cornerRadius: 18)
+            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .buttonStyle(FestivePressStyle())
+        .padding(.top, 5) // room for the snow cap above the card
+    }
+    
+    private func classicHymnCell(_ hymn: Hymn) -> some View {
         NavigationLink(destination: HymnDetailView(hymn: hymn)) { // detail view
             HStack(alignment: .top, spacing: 16) {
                 // Premium hierarchical song category notation icon
@@ -843,5 +905,22 @@ public struct HymnsListView: View {
                 .ignoresSafeArea(edges: .bottom)
             }
         }
+    }
+}
+
+
+/// Glass search field: festive (with a snow cap) at Christmas, the regular card otherwise.
+private struct SearchGlass: ViewModifier {
+    let festive: Bool
+    func body(content: Content) -> some View {
+        if festive { content.festiveGlass(cornerRadius: 16, high: true).padding(.top, 5) }
+        else { content.csiGlassCard(cornerRadius: 16) }
+    }
+}
+
+extension View {
+    /// Applies the Christmas night frame (side string-lights, bottom drift) when `on`.
+    @ViewBuilder func festiveFrameIf(_ on: Bool) -> some View {
+        if on { festiveReaderFrame() } else { self }
     }
 }

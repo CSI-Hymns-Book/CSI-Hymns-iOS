@@ -1,26 +1,12 @@
 import SwiftUI
 
-/// Lyrics reader wrapper for `CarolSong`.
+/// Lyrics reader for a single `CarolSong` (the swipeable `CarolReaderView` with one page).
 public struct CarolSongDetailView: View {
     let song: CarolSong
-    
-    public init(song: CarolSong) {
-        self.song = song
-    }
-    
+
+    public init(song: CarolSong) { self.song = song }
+
     public var body: some View {
-        CarolDetailView(
-            carol: ChristmasCarol(
-                id: song.id.uuidString.lowercased(),
-                title: song.title,
-                churchName: "",
-                lyrics: song.lyrics,
-                scale: song.scale,
-                songNumber: song.songNumber,
-                createdByUserId: song.createdByUserId.uuidString.lowercased(),
-                createdAt: song.createdAt,
-                updatedAt: song.updatedAt
-            )
-        )
+        CarolReaderView(songs: [song], startId: song.id, churchName: "")
     }
 }

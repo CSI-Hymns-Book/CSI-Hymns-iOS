@@ -27,15 +27,18 @@ public struct ChurchDetailView: View {
     private var legacyItems: [ChristmasCarol] { service.legacyCarols(forChurchName: church.name) }
     
     public var body: some View {
+        FestivePaletteProvider { festiveBody }
+    }
+
+    @Environment(\.festivePalette) private var palette
+
+    private var festiveBody: some View {
         ZStack {
-            LinearGradient(
-                colors: [Color(hex: "0D1B2A"), Color(hex: "0B2516")],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            LinearGradient(colors: FestivePalette.night.screenGradient, startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea()
             
             VStack(spacing: 0) {
+                HStack { ReturnToCallerChip(); Spacer() }.padding(.horizontal, 16).padding(.top, 4)
                 Picker("Content", selection: $selectedTab) {
                     ForEach(ChurchContentTab.allCases) { tab in
                         Text(tab.rawValue).tag(tab)
@@ -56,6 +59,8 @@ public struct ChurchDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
         .toolbar {
+            // Only when it has something in it: an empty menu silently ignores taps.
+            if SupabaseService.instance.isAuthenticated || service.canDeleteChurch(church) {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     if SupabaseService.instance.isAuthenticated {
@@ -81,6 +86,7 @@ public struct ChurchDetailView: View {
                     Image(systemName: "plus.circle")
                         .foregroundStyle(.white)
                 }
+            }
             }
         }
         .sheet(isPresented: $isShowingAddSong) {
@@ -125,7 +131,7 @@ public struct ChurchDetailView: View {
                 }
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 12) {
+                    LazyVStack(spacing: 0) {
                         ForEach(churchSongs) { song in
                             songRow(song)
                         }
@@ -133,7 +139,7 @@ public struct ChurchDetailView: View {
                             NavigationLink(destination: CarolDetailView(carol: legacy)) {
                                 legacySongRow(legacy)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(FestivePressStyle())
                         }
                     }
                     .padding(.horizontal, 16)
@@ -151,7 +157,7 @@ public struct ChurchDetailView: View {
                 }
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 12) {
+                    LazyVStack(spacing: 0) {
                         ForEach(churchPdfs) { pdf in
                             pdfRow(pdf)
                         }
@@ -181,34 +187,17 @@ public struct ChurchDetailView: View {
     }
     
     private func songRow(_ song: CarolSong) -> some View {
-        NavigationLink(destination: CarolSongDetailView(song: song)) {
-            HStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(hex: "B22222").opacity(0.2))
-                        .frame(width: 46, height: 46)
-                    Image(systemName: "music.note")
-                        .foregroundStyle(.white)
-                }
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(song.title)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.white)
-                    if let num = song.songNumber, !num.isEmpty {
-                        Text("#\(num) · \(song.scale)")
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.55))
-                    }
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .foregroundStyle(.white.opacity(0.35))
+        let isFavourite = CarolReaderStore.shared.favourites.contains(song.id.uuidString)
+        return NavigationLink(destination: CarolReaderView(songs: churchSongs, startId: song.id, churchName: church.name)) {
+            FestiveSongRow(label: song.songNumber.map { "No. \($0)" } ?? "Carol", title: song.title,
+                           subtitle: song.scale.isEmpty ? nil : "Scale: \(song.scale)", badgeBackground: palette.pineBackground) {
+                Image(systemName: "music.note").foregroundStyle(palette.pine)
+            } trailing: {
+                if isFavourite { Image(systemName: "star.fill").font(.system(size: 14)).foregroundStyle(palette.gold) }
+                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.gold.opacity(0.8))
             }
-            .padding(14)
-            .background(Color.white.opacity(0.07))
-            .cornerRadius(14)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(FestivePressStyle())
         .contextMenu {
             if service.canDeleteSong(song) {
                 Button(role: .destructive) {
@@ -225,29 +214,12 @@ public struct ChurchDetailView: View {
     
     private func pdfRow(_ pdf: CarolPdf) -> some View {
         Button { selectedPdf = pdf } label: {
-            HStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(hex: "FFB347").opacity(0.25))
-                        .frame(width: 46, height: 46)
-                    Image(systemName: "doc.richtext.fill")
-                        .foregroundStyle(Color(hex: "FFB347"))
-                }
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(pdf.title)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.white)
-                    Text("Tap to open PDF")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.55))
-                }
-                Spacer()
-                Image(systemName: "arrow.up.right.square")
-                    .foregroundStyle(.white.opacity(0.35))
+            FestiveSongRow(label: pdf.songNumber.map { "No. \($0)" } ?? "Sheet music", title: pdf.title,
+                           subtitle: "Tap to open PDF", badgeBackground: palette.emberBackground) {
+                Image(systemName: "doc.richtext.fill").foregroundStyle(palette.ember)
+            } trailing: {
+                Image(systemName: "arrow.up.right.square").foregroundStyle(palette.gold.opacity(0.8))
             }
-            .padding(14)
-            .background(Color.white.opacity(0.07))
-            .cornerRadius(14)
         }
         .buttonStyle(.plain)
         .contextMenu {

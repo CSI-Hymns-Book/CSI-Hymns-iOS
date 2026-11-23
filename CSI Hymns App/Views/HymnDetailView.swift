@@ -113,6 +113,8 @@ public struct HymnDetailView: View {
         self.hymn = hymn
     }
     
+    private var festive: Bool { ChristmasModeService.shared.isChristmasTime }
+    
     public var body: some View {
         @Bindable var viewModel = viewModel
         GeometryReader { geometry in
@@ -120,10 +122,10 @@ public struct HymnDetailView: View {
             
             ZStack {
                 // Adaptive theme background
-                theme.backgroundColor
+                (festive ? Color.clear : theme.backgroundColor)
                     .ignoresSafeArea()
                 
-                if theme.activeTheme != .amoled {
+                if !festive, theme.activeTheme != .amoled {
                     theme.backgroundGradient
                         .ignoresSafeArea()
                 }
@@ -286,8 +288,8 @@ public struct HymnDetailView: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .csiGlassNavigationBar(theme: theme)
-        // Immersive reading navbar auto-hide behavior
-        .toolbar(.hidden, for: .tabBar)
+        // Immersive reading: no tab bar, and it slides back as soon as the song is popped.
+        .hidesTabBarWhenPushed()
         .sheet(isPresented: $viewModel.isShowingReportSheet) {
             reportLyricsSheet
         }
@@ -309,6 +311,8 @@ public struct HymnDetailView: View {
             }
             .presentationDetents([.medium, .large])
         }
+        .festiveDimSnow()
+        .festiveFrameIf(festive)
         .onAppear {
             let progress = ReadingProgressService.load(itemType: hymn.type, itemId: "\(hymn.number)")
             if let lang = progress.language {
@@ -721,6 +725,7 @@ public struct HymnDetailView: View {
             .cornerRadius(10)
             .layoutPriority(1)
         }
+        .festiveControlsCard(festive)
     }
 
     
@@ -778,11 +783,7 @@ public struct HymnDetailView: View {
             }
         }
         .padding(compact ? 12 : 16)
-        .background(
-            RoundedRectangle(cornerRadius: compact ? 12 : 16)
-                .fill(theme.surfaceColor)
-                .overlay(RoundedRectangle(cornerRadius: compact ? 12 : 16).stroke(theme.strokeColor, lineWidth: 1))
-        )
+        .festiveBannerOrClassic(festive, cornerRadius: compact ? 12 : 16, fill: theme.surfaceColor, stroke: theme.strokeColor)
         .padding(.horizontal)
     }
     
@@ -1552,5 +1553,25 @@ private extension Float {
     func rounded(toPlaces places: Int) -> Float {
         let divisor = pow(10.0, Float(places))
         return (self * divisor).rounded() / divisor
+    }
+}
+
+
+extension View {
+    /// Controls card at Christmas: frosted glass with a snow cap, drawn inside the lyric margins.
+    @ViewBuilder func festiveControlsCard(_ on: Bool) -> some View {
+        if on { padding(8).festiveGlass(cornerRadius: 16).padding(.horizontal, 12).padding(.top, 5) } else { self }
+    }
+
+    /// Song banner: snow-capped glass at Christmas, the regular card otherwise.
+    @ViewBuilder func festiveBannerOrClassic(_ on: Bool, cornerRadius: CGFloat, fill: Color, stroke: Color) -> some View {
+        if on {
+            festiveGlass(cornerRadius: cornerRadius, high: true).padding(.top, 5)
+        } else {
+            background(
+                RoundedRectangle(cornerRadius: cornerRadius).fill(fill)
+                    .overlay(RoundedRectangle(cornerRadius: cornerRadius).stroke(stroke, lineWidth: 1))
+            )
+        }
     }
 }

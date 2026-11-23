@@ -5,6 +5,7 @@ public struct SettingsView: View {
     @State private var theme = ThemeManager.shared
     @State private var supabase = SupabaseService.instance
     @State private var christmas = ChristmasModeService.shared
+    @State private var festive = FestiveAmbience.shared
     @State private var pageFlipVisibility = PageFlipVisibilityService.shared
     @State private var appConfig = AppConfigService.shared
     @State private var isShowingDeleteAlert = false
@@ -78,6 +79,19 @@ public struct SettingsView: View {
                         settingsRowLabel(title: "Christmas Mode", subtitle: "Enable festive theme and Christmas carols", iconName: "snowflake")
                     }
                     .tint(theme.accentColor)
+                    
+                    if christmas.isChristmasTime {
+                        Picker(selection: effectsBinding) {
+                            Text("Off").tag(FestiveEffectsLevel.off)
+                            Text("Gentle").tag(FestiveEffectsLevel.gentle)
+                        } label: {
+                            settingsRowLabel(title: "Snow & effects", subtitle: "Falling snow, tilt and shake", iconName: "cloud.snow")
+                        }
+                        Toggle(isOn: eggsBinding) {
+                            settingsRowLabel(title: "Easter eggs", subtitle: "\(festive.foundSecrets.count) of \(FestiveSecret.allCases.count) found", iconName: "gift")
+                        }
+                        .tint(theme.accentColor)
+                    }
                     
                     Picker(
                         selection: $midiInstrumentId,
@@ -216,7 +230,7 @@ public struct SettingsView: View {
                 Section {
                     HStack {
                         Spacer()
-                        let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "5.2.0"
+                        let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "5.3.0"
                         Text("CSI Hymns v\(appVersion)")
                             .font(.caption)
                             .foregroundColor(theme.textSecondary)
@@ -312,6 +326,14 @@ public struct SettingsView: View {
     }
     
     // MARK: - Bindings
+    
+    private var effectsBinding: Binding<FestiveEffectsLevel> {
+        Binding(get: { festive.level }, set: { festive.level = $0 })
+    }
+    
+    private var eggsBinding: Binding<Bool> {
+        Binding(get: { festive.easterEggsEnabled }, set: { festive.easterEggsEnabled = $0 })
+    }
     
     private var christmasBinding: Binding<Bool> {
         Binding(
@@ -528,6 +550,8 @@ public struct SettingsView: View {
     private func clearCachesAsync() async {
         isClearing = true
         try? await Task.sleep(for: .seconds(0.8))
+        // Downloaded MIDI tunes, the tune list and temp files.
+        await CacheCleaner.clearAll()
         
         let fileManager = FileManager.default
         if let cacheDir = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first {

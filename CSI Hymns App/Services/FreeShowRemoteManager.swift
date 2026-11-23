@@ -7,9 +7,11 @@ import Security
 enum PresenterMode {
     static var isAvailable: Bool {
         let config = AppConfigService.shared.config
-        guard AdminPrefs.hasAnyAdminRole(
+        // Presenter mode is for full admins (and sudo) and for admins given `media_control`.
+        guard AdminPrefs.hasRole(
             currentUserEmail: SupabaseService.instance.currentUserEmail,
-            adminEmailsConfig: config.adminEmails
+            adminEmailsConfig: config.adminEmails,
+            requiredRole: .mediaControl
         ) else { return false }
         if config.presenterModeEnabled == true { return true }
         guard let data = UserDefaults.standard.data(forKey: "admin_local_config"),

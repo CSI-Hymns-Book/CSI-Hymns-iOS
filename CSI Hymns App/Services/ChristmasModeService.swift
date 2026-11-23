@@ -54,6 +54,11 @@ public final class ChristmasModeService {
         }
         #endif
         
+        #if DEBUG
+        // Debug builds only: `-forceChristmas` on launch previews the festive UI off-season.
+        if ProcessInfo.processInfo.arguments.contains("-forceChristmas") { remoteCheck = true }
+        #endif
+
         // Step 2: Resolve. Remote wins; otherwise fall back to local cache / auto-detect.
         let resolvedValue = remoteCheck ?? Self.loadLocalConfig()
         
