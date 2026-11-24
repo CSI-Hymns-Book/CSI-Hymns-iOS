@@ -53,24 +53,27 @@ public final class ChristmasCarolsService {
         )
     }
     
+    /// Delete is for the person who added the church, or an admin. Nobody else, not even the
+    /// uploader of a single song (see `CarolPermissions`).
     public func canDeleteChurch(_ church: CarolChurch) -> Bool {
-        if isAdmin { return true }
-        guard let uid = SupabaseService.instance.currentUser?.id else { return false }
-        return church.createdByUserId == uid
+        CarolPermissions.canDelete(userId: SupabaseService.instance.currentUser?.id, churchOwnerId: church.createdByUserId, isAdmin: isAdmin)
     }
-    
+
     public func canDeleteSong(_ song: CarolSong) -> Bool {
-        if isAdmin { return true }
-        guard let uid = SupabaseService.instance.currentUser?.id else { return false }
-        return song.createdByUserId == uid
+        CarolPermissions.canDelete(userId: SupabaseService.instance.currentUser?.id, churchOwnerId: church(byId: song.churchId)?.createdByUserId, isAdmin: isAdmin)
     }
-    
+
     public func canDeletePdf(_ pdf: CarolPdf) -> Bool {
-        if isAdmin { return true }
-        guard let uid = SupabaseService.instance.currentUser?.id else { return false }
-        return pdf.createdByUserId == uid
+        CarolPermissions.canDelete(userId: SupabaseService.instance.currentUser?.id, churchOwnerId: church(byId: pdf.churchId)?.createdByUserId, isAdmin: isAdmin)
     }
-    
+
+    /// Editing a song is for the church's owner, the song's own uploader, or an admin.
+    public func canEditSong(_ song: CarolSong) -> Bool {
+        CarolPermissions.canEditSong(userId: SupabaseService.instance.currentUser?.id,
+                                     churchOwnerId: church(byId: song.churchId)?.createdByUserId,
+                                     songOwnerId: song.createdByUserId, isAdmin: isAdmin)
+    }
+
     public func songs(for churchId: UUID) -> [CarolSong] {
         songs.filter { $0.churchId == churchId }
             .sorted { lhs, rhs in
@@ -166,9 +169,7 @@ public final class ChristmasCarolsService {
             throw CarolsServiceError.notAuthenticated
         }
         
-        let joinedLyrics = lyricsEnglish.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? lyricsKannada
-            : "\(lyricsKannada)\n\n---\n\nEnglish Translation:\n\(lyricsEnglish)"
+        let joinedLyrics = CarolBilingual.join(kannada: lyricsKannada, english: lyricsEnglish)
         
         guard !joinedLyrics.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw CarolsServiceError.invalidInput("Lyrics are required for a song.")
@@ -196,6 +197,61 @@ public final class ChristmasCarolsService {
         return song
     }
     
+    /// Saves edits to a song's title, number, scale and lyrics. Only the people who may edit it can.
+    public func updateSong(
+        id: UUID,
+        title: String,
+        songNumber: String?,
+        lyricsKannada: String,
+        lyricsEnglish: String,
+        scale: String
+    ) async throws -> CarolSong {
+        guard let existing = songs.first(where: { $0.id == id }), canEditSong(existing) else {
+            throw CarolsServiceError.notAuthorizedToEdit
+        }
+        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let joinedLyrics = CarolBilingual.join(kannada: lyricsKannada, english: lyricsEnglish)
+        guard !cleanTitle.isEmpty else { throw CarolsServiceError.invalidInput("A song needs a title.") }
+        guard !joinedLyrics.isEmpty else { throw CarolsServiceError.invalidInput("Lyrics are required for a song.") }
+        let number = songNumber?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanNumber = (number?.isEmpty ?? true) ? nil : number
+        let cleanScale = scale.trimmingCharacters(in: .whitespacesAndNewlines)
+        let now = Date()
+
+        #if canImport(Supabase)
+        struct SongEdit: Encodable {
+            let title: String, lyrics: String, scale: String
+            let songNumber: String?, updatedAt: String
+            enum CodingKeys: String, CodingKey { case title, lyrics, scale, songNumber = "song_number", updatedAt = "updated_at" }
+            func encode(to encoder: Encoder) throws {
+                var c = encoder.container(keyedBy: CodingKeys.self)
+                try c.encode(title, forKey: .title); try c.encode(lyrics, forKey: .lyrics); try c.encode(scale, forKey: .scale)
+                try c.encode(songNumber, forKey: .songNumber)   // explicit null clears the number
+                try c.encode(updatedAt, forKey: .updatedAt)
+            }
+        }
+        let edit = SongEdit(title: cleanTitle, lyrics: joinedLyrics, scale: cleanScale.isEmpty ? "C Major" : cleanScale,
+                            songNumber: cleanNumber, updatedAt: ISO8601DateFormatter().string(from: now))
+        let rows: [CarolRowID] = try await SupabaseService.instance.client
+            .from("carol_songs")
+            .update(edit)
+            .eq("id", value: id.uuidString)
+            .select("id")
+            .execute()
+            .value
+        // The database refuses an edit it does not allow by changing zero rows, not by an error.
+        guard !rows.isEmpty else { throw CarolsServiceError.notAuthorizedToEdit }
+        #endif
+
+        let updated = CarolSong(id: existing.id, churchId: existing.churchId, title: cleanTitle, songNumber: cleanNumber,
+                                lyrics: joinedLyrics, scale: cleanScale.isEmpty ? "C Major" : cleanScale,
+                                createdByUserId: existing.createdByUserId, createdAt: existing.createdAt, updatedAt: now)
+        if let index = songs.firstIndex(where: { $0.id == id }) { songs[index] = updated }
+        saveCache()
+        lastSuccessMessage = "Song updated."
+        return updated
+    }
+
     public func addPdf(
         churchId: UUID,
         title: String,
@@ -238,11 +294,7 @@ public final class ChristmasCarolsService {
             throw CarolsServiceError.notAuthorized
         }
         #if canImport(Supabase)
-        try await SupabaseService.instance.client
-            .from("carol_churches")
-            .delete()
-            .eq("id", value: id.uuidString)
-            .execute()
+        try await deleteRow(from: "carol_churches", id: id)
         #endif
         churches.removeAll { $0.id == id }
         songs.removeAll { $0.churchId == id }
@@ -256,11 +308,7 @@ public final class ChristmasCarolsService {
             throw CarolsServiceError.notAuthorized
         }
         #if canImport(Supabase)
-        try await SupabaseService.instance.client
-            .from("carol_songs")
-            .delete()
-            .eq("id", value: id.uuidString)
-            .execute()
+        try await deleteRow(from: "carol_songs", id: id)
         #endif
         songs.removeAll { $0.id == id }
         saveCache()
@@ -272,17 +320,28 @@ public final class ChristmasCarolsService {
             throw CarolsServiceError.notAuthorized
         }
         #if canImport(Supabase)
-        try await SupabaseService.instance.client
-            .from("carol_pdfs")
-            .delete()
-            .eq("id", value: id.uuidString)
-            .execute()
+        try await deleteRow(from: "carol_pdfs", id: id)
         #endif
         pdfs.removeAll { $0.id == id }
         saveCache()
         lastSuccessMessage = "PDF deleted."
     }
     
+    #if canImport(Supabase)
+    /// Deletes one row and checks that the database really removed it. A policy that refuses the
+    /// delete changes zero rows without an error, so an empty result means it was not allowed.
+    private func deleteRow(from table: String, id: UUID) async throws {
+        let removed: [CarolRowID] = try await SupabaseService.instance.client
+            .from(table)
+            .delete()
+            .eq("id", value: id.uuidString)
+            .select("id")
+            .execute()
+            .value
+        guard !removed.isEmpty else { throw CarolsServiceError.notAuthorized }
+    }
+    #endif
+
     // MARK: - Storage
     
     public func uploadCarolPDF(data: Data, fileId: String) async throws -> String {
@@ -443,6 +502,7 @@ public final class ChristmasCarolsService {
 public enum CarolsServiceError: LocalizedError {
     case notAuthenticated
     case notAuthorized
+    case notAuthorizedToEdit
     case invalidInput(String)
     case pdfReadFailed
     case pdfUploadFailed(String)
@@ -451,7 +511,8 @@ public enum CarolsServiceError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .notAuthenticated: return "Please sign in to continue."
-        case .notAuthorized: return "You can only delete items you uploaded. Admins can delete anything."
+        case .notAuthorized: return "Only the person who added this church, or an admin, can delete it."
+        case .notAuthorizedToEdit: return "Only the person who added this song or its church, or an admin, can edit it."
         case .invalidInput(let msg): return msg
         case .pdfReadFailed: return "Couldn't read the selected PDF file."
         case .pdfUploadFailed(let detail): return "PDF upload failed: \(detail)"
@@ -459,3 +520,6 @@ public enum CarolsServiceError: LocalizedError {
         }
     }
 }
+
+/// Just the id column, to confirm a write touched a row.
+private struct CarolRowID: Decodable { let id: UUID }

@@ -20,6 +20,7 @@ enum BookNavigation {
 enum AppHaptics {
     static let settingKey = "enable_haptic_feedback"
     private static let impact = UIImpactFeedbackGenerator(style: .medium)
+    private static let lightImpact = UIImpactFeedbackGenerator(style: .light)
 
     static var isEnabled: Bool { UserDefaults.standard.object(forKey: settingKey) as? Bool ?? true }
 
@@ -28,5 +29,12 @@ enum AppHaptics {
         guard isEnabled else { return }
         impact.impactOccurred(intensity: 0.8)
         impact.prepare()
+    }
+
+    /// A lighter tick for small steps, such as the previous and next song arrows.
+    static func light() {
+        guard isEnabled else { return }
+        lightImpact.impactOccurred(intensity: 0.7)
+        lightImpact.prepare()
     }
 }

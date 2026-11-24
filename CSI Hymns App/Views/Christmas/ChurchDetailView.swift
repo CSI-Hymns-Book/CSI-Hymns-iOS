@@ -17,12 +17,20 @@ public struct ChurchDetailView: View {
     @State private var isShowingDeleteConfirm = false
     @State private var toastMessage: String?
     @State private var selectedPdf: CarolPdf?
+    @State private var songPendingDelete: CarolSong?
+    @State private var pdfPendingDelete: CarolPdf?
+    @State private var songPendingEdit: CarolSong?
+    @State private var isSearching = false
+    @State private var searchText = ""
+    @FocusState private var searchFocused: Bool
     
     public init(church: CarolChurch) {
         self.church = church
     }
     
     private var churchSongs: [CarolSong] { service.songs(for: church.id) }
+    /// The songs after the search box, matching English and Kannada alike.
+    private var visibleSongs: [CarolSong] { CarolSearch.filter(churchSongs, query: searchText) }
     private var churchPdfs: [CarolPdf] { service.pdfs(for: church.id) }
     private var legacyItems: [ChristmasCarol] { service.legacyCarols(forChurchName: church.name) }
     
@@ -59,38 +67,42 @@ public struct ChurchDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
         .toolbar {
-            // Only when it has something in it: an empty menu silently ignores taps.
-            if SupabaseService.instance.isAuthenticated || service.canDeleteChurch(church) {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    if SupabaseService.instance.isAuthenticated {
-                        Button {
-                            isShowingAddSong = true
-                        } label: {
-                            Label("Add Song (Lyrics)", systemImage: "text.alignleft")
-                        }
-                        Button {
-                            isShowingAddPdf = true
-                        } label: {
-                            Label("Add PDF Sheet", systemImage: "doc.richtext")
-                        }
+            if selectedTab == .songs && !churchSongs.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { toggleSearch() } label: {
+                        Image(systemName: isSearching ? "magnifyingglass.circle.fill" : "magnifyingglass").foregroundStyle(.white)
                     }
-                    if service.canDeleteChurch(church) {
-                        Button(role: .destructive) {
-                            isShowingDeleteConfirm = true
-                        } label: {
-                            Label("Delete Church", systemImage: "trash")
-                        }
-                    }
-                } label: {
-                    Image(systemName: "plus.circle")
-                        .foregroundStyle(.white)
+                    .accessibilityLabel(isSearching ? "Close search" : "Search songs")
                 }
             }
+            // Each menu only exists when it has something in it: an empty menu ignores taps.
+            if SupabaseService.instance.isAuthenticated {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button { isShowingAddSong = true } label: { Label("Add Song (Lyrics)", systemImage: "text.alignleft") }
+                        Button { isShowingAddPdf = true } label: { Label("Add PDF Sheet", systemImage: "doc.richtext") }
+                    } label: {
+                        Image(systemName: "plus.circle").foregroundStyle(.white)
+                    }
+                    .accessibilityLabel("Add a song or PDF")
+                }
+            }
+            if service.canDeleteChurch(church) {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button(role: .destructive) { isShowingDeleteConfirm = true } label: { Label("Delete church", systemImage: "trash") }
+                    } label: {
+                        Image(systemName: "ellipsis.circle").foregroundStyle(.white)
+                    }
+                    .accessibilityLabel("Church options")
+                }
             }
         }
         .sheet(isPresented: $isShowingAddSong) {
             AddCarolSongFormView(church: church)
+        }
+        .sheet(item: $songPendingEdit) { song in
+            AddCarolSongFormView(church: church, editing: song)
         }
         .sheet(isPresented: $isShowingAddPdf) {
             AddCarolPdfFormView(church: church)
@@ -106,7 +118,7 @@ public struct ChurchDetailView: View {
             }
         }
         .festiveAlert("Delete Church?", isPresented: $isShowingDeleteConfirm,
-                      message: "This removes the church and all songs/PDFs inside it. Only you or an admin can do this.",
+                      message: "This removes the church and all songs and PDFs inside it. Only the person who added the church, or an admin, can do this.",
                       buttons: [.cancel(), .destructive("Delete") {
                           Task {
                               do {
@@ -117,9 +129,51 @@ public struct ChurchDetailView: View {
                               }
                           }
                       }])
+        // Songs and PDFs ask first, like deleting a church does.
+        .festiveAlert("Delete song?", isPresented: Binding(get: { songPendingDelete != nil }, set: { if !$0 { songPendingDelete = nil } }),
+                      message: "Remove \(songPendingDelete?.title ?? "this song")? This cannot be undone.",
+                      buttons: [.cancel(), .destructive("Delete") { [song = songPendingDelete] in
+                          // The song is captured now: the alert clears `songPendingDelete` as it closes.
+                          guard let song else { return }
+                          Task {
+                              do { try await service.deleteSong(id: song.id) }
+                              catch { toastMessage = error.localizedDescription }
+                          }
+                      }])
+        .festiveAlert("Delete PDF?", isPresented: Binding(get: { pdfPendingDelete != nil }, set: { if !$0 { pdfPendingDelete = nil } }),
+                      message: "Remove \(pdfPendingDelete?.title ?? "this PDF")? This cannot be undone.",
+                      buttons: [.cancel(), .destructive("Delete") { [pdf = pdfPendingDelete] in
+                          guard let pdf else { return }
+                          Task {
+                              do { try await service.deletePdf(id: pdf.id) }
+                              catch { toastMessage = error.localizedDescription }
+                          }
+                      }])
         .appToast(message: $toastMessage, isError: toastMessage?.contains("only") == true || toastMessage?.contains("Couldn't") == true)
     }
     
+    private func toggleSearch() {
+        withAnimation(.easeInOut(duration: 0.2)) { isSearching.toggle() }
+        if isSearching { searchFocused = true } else { searchText = ""; searchFocused = false }
+    }
+
+    private var songSearchBar: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass").foregroundStyle(palette.gold)
+            TextField("Search songs in English or ಕನ್ನಡ", text: $searchText)
+                .foregroundStyle(palette.ink).textInputAutocapitalization(.never).autocorrectionDisabled()
+                .focused($searchFocused).submitLabel(.search)
+            if !searchText.isEmpty {
+                Button { searchText = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(palette.inkMuted) }
+                    .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 11)
+        .festiveGlass(cornerRadius: 26, high: true)
+        .padding(.horizontal, 16).padding(.bottom, 6)
+        .transition(.move(edge: .top).combined(with: .opacity))
+    }
+
     private var songsContent: some View {
         Group {
             if churchSongs.isEmpty && legacyItems.filter({ $0.hasLyrics }).isEmpty {
@@ -127,20 +181,32 @@ public struct ChurchDetailView: View {
                     if SupabaseService.instance.isAuthenticated { isShowingAddSong = true }
                 }
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(churchSongs) { song in
-                            songRow(song)
-                        }
-                        ForEach(legacyItems.filter { $0.hasLyrics && !$0.hasPdf }) { legacy in
-                            NavigationLink(destination: CarolDetailView(carol: legacy)) {
-                                legacySongRow(legacy)
+                VStack(spacing: 0) {
+                    if isSearching { songSearchBar }
+                    let legacy = legacyItems.filter { $0.hasLyrics && !$0.hasPdf && CarolSearch.matches(text: $0.title, query: searchText) }
+                    if visibleSongs.isEmpty && legacy.isEmpty {
+                        Text("No songs match “\(searchText)”.")
+                            .font(.system(size: 15)).foregroundStyle(palette.inkMuted)
+                            .frame(maxWidth: .infinity).padding(.top, 48)
+                        Spacer()
+                    } else {
+                        ScrollView {
+                            LazyVStack(spacing: 0) {
+                                ForEach(visibleSongs) { song in
+                                    songRow(song)
+                                }
+                                ForEach(legacy) { legacy in
+                                    NavigationLink(destination: CarolDetailView(carol: legacy)) {
+                                        legacySongRow(legacy)
+                                    }
+                                    .buttonStyle(FestivePressStyle())
+                                }
                             }
-                            .buttonStyle(FestivePressStyle())
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 24)
                         }
+                        .scrollDismissesKeyboard(.interactively)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 24)
                 }
             }
         }
@@ -185,51 +251,71 @@ public struct ChurchDetailView: View {
     
     private func songRow(_ song: CarolSong) -> some View {
         let isFavourite = CarolReaderStore.shared.favourites.contains(song.id.uuidString)
-        return NavigationLink(destination: CarolReaderView(songs: churchSongs, startId: song.id, churchName: church.name)) {
-            FestiveSongRow(label: song.songNumber.map { "No. \($0)" } ?? "Carol", title: song.title,
-                           subtitle: song.scale.isEmpty ? nil : "Scale: \(song.scale)", badgeBackground: palette.pineBackground) {
-                Image(systemName: "music.note").foregroundStyle(palette.pine)
-            } trailing: {
-                if isFavourite { Image(systemName: "star.fill").font(.system(size: 14)).foregroundStyle(palette.gold) }
-                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.gold.opacity(0.8))
-            }
-        }
-        .buttonStyle(FestivePressStyle())
-        .contextMenu {
-            if service.canDeleteSong(song) {
-                Button(role: .destructive) {
-                    Task {
-                        do { try await service.deleteSong(id: song.id) }
-                        catch { toastMessage = error.localizedDescription }
+        let canEdit = service.canEditSong(song), canDelete = service.canDeleteSong(song)
+        let hasMenu = canEdit || canDelete
+        return ZStack(alignment: .trailing) {
+            NavigationLink(destination: CarolReaderView(songs: churchSongs, startId: song.id, churchName: church.name)) {
+                FestiveSongRow(label: song.songNumber.map { "No. \($0)" } ?? "Carol", title: song.title,
+                               subtitle: song.scale.isEmpty ? nil : "Scale: \(song.scale)", badgeBackground: palette.pineBackground) {
+                    FestiveCarolBadge()
+                } trailing: {
+                    if isFavourite { Image(systemName: "star.fill").font(.system(size: 14)).foregroundStyle(palette.gold) }
+                    if hasMenu {
+                        Color.clear.frame(width: 34, height: 1)   // room for the menu button on top
+                    } else {
+                        Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.gold.opacity(0.8))
                     }
-                } label: {
-                    Label("Delete Song", systemImage: "trash")
                 }
             }
+            .buttonStyle(FestivePressStyle())
+            if hasMenu {
+                overflowMenu(label: song.title, canEdit: canEdit, onEdit: { songPendingEdit = song },
+                             canDelete: canDelete, onDelete: { songPendingDelete = song })
+            }
+        }
+        .contextMenu {
+            if canEdit { Button { songPendingEdit = song } label: { Label("Edit song", systemImage: "pencil") } }
+            if canDelete { Button(role: .destructive) { songPendingDelete = song } label: { Label("Delete song", systemImage: "trash") } }
         }
     }
-    
-    private func pdfRow(_ pdf: CarolPdf) -> some View {
-        Button { selectedPdf = pdf } label: {
-            FestiveSongRow(label: pdf.songNumber.map { "No. \($0)" } ?? "Sheet music", title: pdf.title,
-                           subtitle: "Tap to open PDF", badgeBackground: palette.emberBackground) {
-                Image(systemName: "doc.richtext.fill").foregroundStyle(palette.ember)
-            } trailing: {
-                Image(systemName: "arrow.up.right.square").foregroundStyle(palette.gold.opacity(0.8))
-            }
+
+    /// The three-dot menu at the end of a row. Edit and Delete live here, never as a bare button.
+    private func overflowMenu(label: String, canEdit: Bool, onEdit: @escaping () -> Void,
+                              canDelete: Bool, onDelete: @escaping () -> Void) -> some View {
+        Menu {
+            if canEdit { Button { onEdit() } label: { Label("Edit", systemImage: "pencil") } }
+            if canDelete { Button(role: .destructive) { onDelete() } label: { Label("Delete", systemImage: "trash") } }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 16, weight: .bold)).foregroundStyle(palette.inkMuted)
+                .frame(width: 40, height: 40).contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .contextMenu {
-            if service.canDeletePdf(pdf) {
-                Button(role: .destructive) {
-                    Task {
-                        do { try await service.deletePdf(id: pdf.id) }
-                        catch { toastMessage = error.localizedDescription }
+        .padding(.trailing, 24)
+        .accessibilityLabel("More options for \(label)")
+    }
+
+    private func pdfRow(_ pdf: CarolPdf) -> some View {
+        let canDelete = service.canDeletePdf(pdf)
+        return ZStack(alignment: .trailing) {
+            Button { selectedPdf = pdf } label: {
+                FestiveSongRow(label: pdf.songNumber.map { "No. \($0)" } ?? "Sheet music", title: pdf.title,
+                               subtitle: "Tap to open PDF", badgeBackground: palette.emberBackground) {
+                    Image(systemName: "doc.richtext.fill").foregroundStyle(palette.ember)
+                } trailing: {
+                    if canDelete {
+                        Color.clear.frame(width: 34, height: 1)
+                    } else {
+                        Image(systemName: "arrow.up.right.square").foregroundStyle(palette.gold.opacity(0.8))
                     }
-                } label: {
-                    Label("Delete PDF", systemImage: "trash")
                 }
             }
+            .buttonStyle(FestivePressStyle())
+            if canDelete {
+                overflowMenu(label: pdf.title, canEdit: false, onEdit: {}, canDelete: true, onDelete: { pdfPendingDelete = pdf })
+            }
+        }
+        .contextMenu {
+            if canDelete { Button(role: .destructive) { pdfPendingDelete = pdf } label: { Label("Delete PDF", systemImage: "trash") } }
         }
     }
     
@@ -237,7 +323,7 @@ public struct ChurchDetailView: View {
         HStack(spacing: 14) {
             ZStack {
                 RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.1)).frame(width: 46, height: 46)
-                Image(systemName: "music.note").foregroundStyle(.white)
+                FestiveCarolBadge(size: 32)
             }
             VStack(alignment: .leading) {
                 Text(carol.title).font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)

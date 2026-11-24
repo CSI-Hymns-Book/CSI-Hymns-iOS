@@ -31,6 +31,16 @@ public enum FestiveEffectsLevel: String, CaseIterable, Sendable {
     }
 }
 
+// MARK: - Christmas mode resolution
+
+/// Decides whether Christmas mode is on. What the user chose on this phone always wins; otherwise
+/// the server's setting, then the last server setting we saw (offline), then the calendar season.
+public enum ChristmasModeResolver {
+    public static func resolve(manual: Bool?, remote: Bool?, cachedRemote: Bool?, season: Bool) -> Bool {
+        manual ?? remote ?? cachedRemote ?? season
+    }
+}
+
 // MARK: - Secrets
 
 public enum FestiveSecret: String, CaseIterable, Sendable {

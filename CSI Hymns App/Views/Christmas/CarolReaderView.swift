@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// The carol reader: swipe between a church's songs; star a song, share its lyrics, change the
-/// text size and start Present mode. The screen stays awake while a carol is open.
+/// The carol reader: swipe or use the side arrows to move between a church's songs; star a song,
+/// change the text size with a slider, edit it (if you may) and start Present mode. The screen
+/// stays awake while a carol is open.
 struct CarolReaderView: View {
     let songs: [CarolSong]
     let churchName: String
@@ -16,14 +17,10 @@ struct CarolReaderView: View {
         _selection = State(initialValue: songs.contains { $0.id == startId } ? startId : (songs.first?.id ?? startId))
     }
 
-    private var current: CarolSong? { songs.first { $0.id == selection } ?? songs.first }
-
     var body: some View {
-        FestivePaletteProvider { reader }
-    }
-
-    private var reader: some View {
-        ReaderBody(songs: songs, churchName: churchName, selection: $selection, languages: $languages, presenting: $presenting, store: store)
+        FestivePaletteProvider {
+            ReaderBody(songs: songs, churchName: churchName, selection: $selection, languages: $languages, presenting: $presenting, store: store)
+        }
     }
 }
 
@@ -34,26 +31,34 @@ private struct ReaderBody: View {
     @Binding var languages: [UUID: String]
     @Binding var presenting: Bool
     let store: CarolReaderStore
+    @State private var service = ChristmasCarolsService.shared
+    @State private var showTextSize = false
+    @State private var editing: CarolSong?
     @Environment(\.festivePalette) private var palette
 
-    private var current: CarolSong? { songs.first { $0.id == selection } ?? songs.first }
-    private var index: Int { songs.firstIndex { $0.id == selection } ?? 0 }
+    /// The songs as they are now, so an edit shows straight away. A song that has gone is dropped.
+    private var liveSongs: [CarolSong] {
+        songs.compactMap { original in service.songs.first { $0.id == original.id } ?? (service.songs.isEmpty ? original : nil) }
+    }
+    private var current: CarolSong? { liveSongs.first { $0.id == selection } ?? liveSongs.first }
+    private var index: Int { liveSongs.firstIndex { $0.id == selection } ?? 0 }
 
     var body: some View {
         TabView(selection: $selection) {
-            ForEach(songs) { song in
-                LyricsPage(song: song, churchName: churchName, scale: store.textScale,
-                           language: Binding(get: { languages[song.id] ?? "Kannada" }, set: { languages[song.id] = $0 }))
+            ForEach(liveSongs) { song in
+                CarolLyricsPage(song: song, churchName: churchName, scale: store.textScale,
+                                language: Binding(get: { languages[song.id] ?? "Kannada" }, set: { languages[song.id] = $0 }))
                     .tag(song.id)
             }
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
         .festiveReaderFrame()
         .festiveDimSnow()
+        .overlay { sideArrows }
         .overlay(alignment: .bottom) {
             HStack(alignment: .center) {
-                if songs.count > 1 {
-                    Text("\(index + 1) of \(songs.count)  ·  swipe").font(.system(size: 12)).foregroundStyle(palette.inkMuted)
+                if liveSongs.count > 1 {
+                    Text("\(index + 1) of \(liveSongs.count)").font(.system(size: 12, weight: .medium)).foregroundStyle(palette.inkMuted)
                 }
                 Spacer()
                 ReturnToCallerChip()
@@ -63,36 +68,9 @@ private struct ReaderBody: View {
         .navigationTitle(current?.title ?? "Carol")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
-        .toolbar {
-            // Two items only: with more, iOS folds them into its own "•••" overflow, which did
-            // nothing when tapped. Everything else lives in a real menu we control.
-            if let song = current {
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button { AppHaptics.tap(); store.toggleFavourite(song.id.uuidString) } label: {
-                        Image(systemName: store.favourites.contains(song.id.uuidString) ? "star.fill" : "star")
-                    }
-                    .accessibilityLabel(store.favourites.contains(song.id.uuidString) ? "Remove from favourites" : "Add to favourites")
-                    Menu {
-                        ShareLink(item: carolShareText(title: song.title, number: song.songNumber, churchName: churchName,
-                                                       lyrics: lyrics(of: song, language: languages[song.id] ?? "Kannada"))) {
-                            Label("Share lyrics", systemImage: "square.and.arrow.up")
-                        }
-                        Button { presenting = true } label: { Label("Present verse by verse", systemImage: "rectangle.on.rectangle") }
-                        Divider()
-                        Button { store.setTextScale(CarolTextScale.bigger(store.textScale)) } label: {
-                            Label("Bigger text", systemImage: "textformat.size.larger")
-                        }
-                        .disabled(store.textScale >= CarolTextScale.max)
-                        Button { store.setTextScale(CarolTextScale.smaller(store.textScale)) } label: {
-                            Label("Smaller text", systemImage: "textformat.size.smaller")
-                        }
-                        .disabled(store.textScale <= CarolTextScale.min)
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                    }
-                    .accessibilityLabel("More options")
-                }
-            }
+        .toolbar { toolbarItems }
+        .sheet(item: $editing) { song in
+            if let church = service.church(byId: song.churchId) { AddCarolSongFormView(church: church, editing: song) }
         }
         .onChange(of: selection, initial: true) { _, id in store.markViewed(id.uuidString) }
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
@@ -104,54 +82,67 @@ private struct ReaderBody: View {
         }
     }
 
+    // MARK: Previous / next
+
+    private var sideArrows: some View {
+        HStack {
+            arrow("chevron.left", label: "Previous song", enabled: index > 0) { move(-1) }
+            Spacer()
+            arrow("chevron.right", label: "Next song", enabled: index < liveSongs.count - 1) { move(1) }
+        }
+        .padding(.horizontal, 8)
+    }
+
+    private func arrow(_ symbol: String, label: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 17, weight: .bold)).foregroundStyle(palette.ink)
+                .frame(width: 42, height: 42)
+                .background(.ultraThinMaterial, in: Circle())
+                .overlay(Circle().strokeBorder(palette.edge, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .opacity(enabled ? 1 : 0.28)
+        .disabled(!enabled)
+        .accessibilityLabel(label)
+    }
+
+    private func move(_ step: Int) {
+        let target = index + step
+        guard liveSongs.indices.contains(target) else { return }
+        AppHaptics.light()
+        withAnimation(.easeInOut(duration: 0.3)) { selection = liveSongs[target].id }
+    }
+
+    // MARK: Toolbar
+
+    @ToolbarContentBuilder
+    private var toolbarItems: some ToolbarContent {
+        ToolbarItemGroup(placement: .topBarTrailing) {
+            if let song = current {
+                Button { store.toggleFavourite(song.id.uuidString) } label: {
+                    Image(systemName: store.favourites.contains(song.id.uuidString) ? "star.fill" : "star")
+                }
+                .accessibilityLabel(store.favourites.contains(song.id.uuidString) ? "Remove from favourites" : "Add to favourites")
+                Button { showTextSize = true } label: { Image(systemName: "textformat.size") }
+                    .accessibilityLabel("Text size")
+                    .popover(isPresented: $showTextSize) {
+                        CarolTextSizeControl(store: store).presentationCompactAdaptation(.popover)
+                    }
+                Menu {
+                    Button { presenting = true } label: { Label("Present verse by verse", systemImage: "rectangle.on.rectangle") }
+                    if service.canEditSong(song) {
+                        Button { editing = song } label: { Label("Edit song", systemImage: "pencil") }
+                    }
+                } label: { Image(systemName: "ellipsis.circle") }
+                    .accessibilityLabel("More options")
+            }
+        }
+    }
+
     private func lyrics(of song: CarolSong, language: String) -> String {
         let parts = CarolBilingual.split(song.lyrics)
         return language == "English" ? (parts.english ?? parts.kannada) : parts.kannada
-    }
-}
-
-enum CarolBilingual {
-    /// Splits lyrics that carry an English translation after a divider.
-    static func split(_ lyrics: String) -> (kannada: String, english: String?) {
-        for separator in ["\n\n---\n\nEnglish Translation:\n", "\n\n---\n\nEnglish:\n", "\n\n---\n\n"] {
-            let parts = lyrics.components(separatedBy: separator)
-            if parts.count > 1 { return (parts[0].trimmingCharacters(in: .whitespacesAndNewlines), parts[1].trimmingCharacters(in: .whitespacesAndNewlines)) }
-        }
-        return (lyrics, nil)
-    }
-}
-
-private struct LyricsPage: View {
-    let song: CarolSong
-    let churchName: String
-    let scale: Double
-    @Binding var language: String
-    @Environment(\.festivePalette) private var palette
-
-    var body: some View {
-        let parts = CarolBilingual.split(song.lyrics)
-        let size = 17 * scale
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                if !churchName.isEmpty {
-                    Text(churchName.uppercased()).font(.system(size: 11, weight: .bold)).tracking(1.3).foregroundStyle(palette.gold)
-                }
-                Text(song.title).font(.festiveSerif(26)).foregroundStyle(palette.ink).padding(.top, 2)
-                Text([song.songNumber.map { "No. \($0)" }, song.scale.isEmpty ? nil : song.scale].compactMap { $0 }.joined(separator: " · "))
-                    .font(.system(size: 13)).foregroundStyle(palette.inkMuted).padding(.top, 4)
-                if parts.english != nil {
-                    Picker("Language", selection: $language) {
-                        Text("ಕನ್ನಡ").tag("Kannada"); Text("English").tag("English")
-                    }
-                    .pickerStyle(.segmented).frame(maxWidth: 220).padding(.top, 14)
-                }
-                Text(language == "English" ? (parts.english ?? parts.kannada) : parts.kannada)
-                    .font(.system(size: size)).lineSpacing(size * 0.5).foregroundStyle(palette.ink)
-                    .padding(.top, 18)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 96)
-        }
     }
 }
 
@@ -162,6 +153,7 @@ struct CarolPresenterView: View {
     let stanzas: [String]
     let onClose: () -> Void
     @State private var page = 0
+    @State private var width: CGFloat = 0
 
     var body: some View {
         let pages = stanzas.isEmpty ? [title] : stanzas
@@ -178,10 +170,13 @@ struct CarolPresenterView: View {
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            HStack(spacing: 0) {
-                Color.clear.contentShape(Rectangle()).onTapGesture { withAnimation { page = max(0, page - 1) } }
-                Color.clear.contentShape(Rectangle()).onTapGesture { withAnimation { page = min(pages.count - 1, page + 1) } }
-            }
+            // Taps are read on the pager itself. A full-screen tap layer on top would take the
+            // touches first and block swiping between verses.
+            .simultaneousGesture(SpatialTapGesture().onEnded { tap in
+                let step = PresenterTap.at(x: tap.location.x, width: width) == .previous ? -1 : 1
+                withAnimation { page = PresenterPaging.moved(page, by: step, count: pages.count) }
+            })
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
             VStack {
                 HStack {
                     Text("\(title)  ·  \(page + 1) of \(pages.count)").font(.system(size: 13)).foregroundStyle(Color(hex: "E9C27B"))
@@ -193,6 +188,9 @@ struct CarolPresenterView: View {
                 Spacer()
             }
         }
+        .onChange(of: pages.count) { _, count in page = PresenterPaging.clamped(page, count: count) }
+        .accessibilityAction(named: "Next verse") { withAnimation { page = PresenterPaging.moved(page, by: 1, count: pages.count) } }
+        .accessibilityAction(named: "Previous verse") { withAnimation { page = PresenterPaging.moved(page, by: -1, count: pages.count) } }
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
     }
