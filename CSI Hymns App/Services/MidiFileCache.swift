@@ -28,14 +28,16 @@ public final class MidiFileCache: @unchecked Sendable {
         midiHymnsRanges: String?,
         midiKeerthanesRanges: String?,
         disableOggFallback: String?,
-        audioBackupUrl: String?
+        audioBackupUrl: String?,
+        midiRefreshVersion: String? = nil
     ) -> String {
         let raw = [
             githubToken ?? "",
             midiHymnsRanges ?? "",
             midiKeerthanesRanges ?? "",
             disableOggFallback ?? "",
-            audioBackupUrl ?? ""
+            audioBackupUrl ?? "",
+            midiRefreshVersion ?? ""
         ].joined(separator: "|")
         return sha256(raw).prefix(16).description
     }
@@ -47,7 +49,8 @@ public final class MidiFileCache: @unchecked Sendable {
             midiHymnsRanges: d.string(forKey: "midi_hymns_ranges_cached"),
             midiKeerthanesRanges: d.string(forKey: "midi_keerthanes_ranges_cached"),
             disableOggFallback: d.string(forKey: "disable_ogg_fallback_cached"),
-            audioBackupUrl: d.string(forKey: "audio_backup_url_cached")
+            audioBackupUrl: d.string(forKey: "audio_backup_url_cached"),
+            midiRefreshVersion: d.string(forKey: "midi_refresh_version_cached")
         )
     }
     

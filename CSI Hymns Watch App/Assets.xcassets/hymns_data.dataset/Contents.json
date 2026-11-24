@@ -1,0 +1,12 @@
+{
+  "data" : [
+    {
+      "filename" : "hymns_data.json",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

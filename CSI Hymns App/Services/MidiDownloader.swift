@@ -10,7 +10,7 @@ enum MidiDownloadError: LocalizedError, Equatable {
     
     var errorDescription: String? {
         switch self {
-        case .notFound: return "Audio file not found on the server."
+        case .notFound: return "Audio recording for this tune is not available yet."
         case .forbidden: return "Audio server denied access. Try again later."
         case .timeout: return "Audio download timed out."
         case .offline: return "You're offline. Connect to the internet to play audio."
@@ -57,13 +57,19 @@ enum MidiDownloader {
         }
         
         if useAPI, let token {
-            if let data = try? await execute(url: url, auth: "Bearer \(token)") {
-                return data
+            var lastError = MidiDownloadError.forbidden
+            for auth in ["Bearer \(token)", "token \(token)"] {
+                do {
+                    return try await execute(url: url, auth: auth)
+                } catch let error as MidiDownloadError {
+                    // A missing file is "not available yet", not an access problem.
+                    if error == .notFound { throw error }
+                    lastError = error
+                } catch {
+                    continue
+                }
             }
-            if let data = try? await execute(url: url, auth: "token \(token)") {
-                return data
-            }
-            throw MidiDownloadError.forbidden
+            throw lastError
         }
         
         return try await execute(url: url, auth: nil)

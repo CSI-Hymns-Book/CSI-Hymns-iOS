@@ -10,6 +10,7 @@ public enum AdminPrefs {
         case prManager = "pr_manager"
         case appConfig = "app_config"
         case tuneMeterView = "tune_meter_view"
+        case mediaControl = "media_control"
         
         public var label: String {
             switch self {
@@ -18,6 +19,7 @@ public enum AdminPrefs {
             case .prManager: return "Announcements Manager"
             case .appConfig: return "App Config Manager"
             case .tuneMeterView: return "Tune Meters View"
+            case .mediaControl: return "Media Control (Presenter Mode)"
             }
         }
         

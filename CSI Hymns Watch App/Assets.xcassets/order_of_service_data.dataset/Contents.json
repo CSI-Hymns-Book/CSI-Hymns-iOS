@@ -1,0 +1,12 @@
+{
+  "data" : [
+    {
+      "filename" : "order_of_service_data.json",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

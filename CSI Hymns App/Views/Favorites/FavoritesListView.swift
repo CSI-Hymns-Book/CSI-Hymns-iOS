@@ -3,6 +3,9 @@ import Observation
 
 /// A premium, glassmorphic Favorites Manager screen supporting all app themes.
 public struct FavoritesListView: View {
+    /// Read once when the screen opens: while it animates away after "Home" the section is
+    /// already cleared, and a live check would swap the toolbar mid-animation and jolt the list.
+    @State private var showsHomeButton = AppNavigationService.shared.activeSection != nil
     @Binding var selectedTab: Int
     @State private var theme = ThemeManager.shared
     @State private var favoritesManager = FavoritesManager.shared
@@ -95,12 +98,10 @@ public struct FavoritesListView: View {
             .navigationBarTitleDisplayMode(.inline)
             .csiGlassNavigationBar(theme: theme)
             .toolbar {
-                if AppNavigationService.shared.activeSection != nil {
+                if showsHomeButton {
                     ToolbarItem(placement: .topBarLeading) {
                         Button {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                AppNavigationService.shared.activeSection = nil
-                            }
+                            BookNavigation.goHome()
                         } label: {
                             HStack(spacing: 3) {
                                 Image(systemName: "chevron.left")

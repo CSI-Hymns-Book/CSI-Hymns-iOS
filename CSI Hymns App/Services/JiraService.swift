@@ -52,6 +52,11 @@ public actor JiraService {
         self.jiraURLString = urlStr
     }
     
+    /// The installed app version, written into every ticket.
+    public static var currentAppVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+    }
+    
     /// Submits a new support task ticket to Jira Cloud REST APIs.
     public func createTicket(
         songType: String,
@@ -74,16 +79,16 @@ public actor JiraService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         
-        let summary = isAudioContribution
-            ? "\(songType) \(songNumber) Audio Contribution"
-            : "Lyric Issue: \(songType) \(songNumber) - \(songTitle)"
+        // Same title and description layout as Android, so the lyrics-triage automation can read iOS reports.
+        let summary = LyricsTicketType.summary(songType: songType, number: songNumber, isAudioContribution: isAudioContribution)
         let descNode = buildDescriptionNode(
-            songType: songType,
-            number: songNumber,
-            title: songTitle,
-            details: description,
-            version: appVersion,
-            isAudioContribution: isAudioContribution
+            LyricsTicketType.description(
+                songType: songType,
+                number: songNumber,
+                title: songTitle,
+                version: appVersion,
+                details: description
+            )
         )
         
         let labels = isAudioContribution
@@ -166,53 +171,17 @@ public actor JiraService {
     
     // MARK: - Helpers
     
-    private func buildDescriptionNode(
-        songType: String,
-        number: Int,
-        title: String,
-        details: String?,
-        version: String,
-        isAudioContribution: Bool
-    ) -> [String: Any] {
-        var content: [[String: Any]] = [
-            [
-                "type": "paragraph",
-                "content": [
-                    ["type": "text", "text": isAudioContribution ? "Audio contribution for " : "An issue was reported for "],
-                    ["type": "text", "text": "\(songType) \(number) — \(title)", "marks": [["type": "strong"]]],
-                    ["type": "text", "text": "."]
-                ]
-            ],
-            [
-                "type": "paragraph",
-                "content": [
-                    ["type": "text", "text": "App Version: ", "marks": [["type": "strong"]]],
-                    ["type": "text", "text": version]
-                ]
-            ],
-            [
-                "type": "paragraph",
-                "content": [
-                    ["type": "text", "text": "Reported via: ", "marks": [["type": "strong"]]],
-                    ["type": "text", "text": "CSI Hymns App iOS"]
-                ]
-            ]
-        ]
-        
-        if let details = details, !details.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            content.append([
-                "type": "paragraph",
-                "content": [
-                    ["type": "text", "text": "User Description: ", "marks": [["type": "strong"]]],
-                    ["type": "text", "text": details]
-                ]
-            ])
-        }
-        
-        return [
+    /// Wraps the ticket text in one Atlassian Document Format paragraph (line breaks stay inside the text).
+    private func buildDescriptionNode(_ text: String) -> [String: Any] {
+        [
             "type": "doc",
             "version": 1,
-            "content": content
+            "content": [
+                [
+                    "type": "paragraph",
+                    "content": [["type": "text", "text": text]]
+                ]
+            ]
         ]
     }
     

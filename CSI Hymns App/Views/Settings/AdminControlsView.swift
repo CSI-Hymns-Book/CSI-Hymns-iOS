@@ -1216,6 +1216,7 @@ struct AdminConfigManagerView: View {
     @State private var isChristmasTime = false
     @State private var isMangaloreHymnsEnabled = true
     @State private var pageFlipVisible = true
+    @State private var presenterModeEnabled = false
     @State private var castEnabled = false
     @State private var castAppId = ""
     @State private var castReceiverUrl = ""
@@ -1235,6 +1236,7 @@ struct AdminConfigManagerView: View {
     @State private var midiKeerthanesRanges = ""
     @State private var disableOggFallback = ""
     @State private var audioBackupUrl = ""
+    @State private var midiRefreshVersion = ""
     @State private var masterRootPasscode = ""
     
     var body: some View {
@@ -1253,6 +1255,7 @@ struct AdminConfigManagerView: View {
                 Toggle("Christmas Time Mode", isOn: $isChristmasTime)
                 Toggle("Mangalore Hymns Enabled", isOn: $isMangaloreHymnsEnabled)
                 Toggle("Page Flip View Visible", isOn: $pageFlipVisible)
+                Toggle("Presenter Mode (FreeShow export, admins only)", isOn: $presenterModeEnabled)
                 Toggle("Google Cast Support", isOn: $castEnabled)
                 TextField("Google Cast App ID", text: $castAppId)
                 TextField("Google Cast Receiver URL", text: $castReceiverUrl)
@@ -1269,6 +1272,16 @@ struct AdminConfigManagerView: View {
                 TextField("MIDI Keerthanes Ranges", text: $midiKeerthanesRanges)
                 TextField("Disable OGG Fallback (hymns|keerthane|both)", text: $disableOggFallback)
                 TextField("Audio Backup URL", text: $audioBackupUrl)
+                Button {
+                    // A new version makes every device re-download tunes and the tune list.
+                    midiRefreshVersion = String(Int(Date().timeIntervalSince1970))
+                    saveConfig()
+                } label: {
+                    Label("Force push MIDI updates", systemImage: "arrow.triangle.2.circlepath")
+                }
+                if !midiRefreshVersion.isEmpty {
+                    Text("Current refresh version: \(midiRefreshVersion)").font(.caption).foregroundColor(.gray)
+                }
             }
             
             Section(header: Text("Force Update Policies")) {
@@ -1282,7 +1295,7 @@ struct AdminConfigManagerView: View {
             }
             
             Section(header: Text("Administration")) {
-                Text("JSON object: email → roles array. Roles: admin, lyrics, pr_manager, app_config, tune_meter_view. Saved as jsonb object.")
+                Text("JSON object: email → roles array. Roles: admin, lyrics, pr_manager, app_config, tune_meter_view, media_control (Presenter Mode). Saved as jsonb object.")
                     .font(.caption)
                     .foregroundColor(.gray)
                 TextField("Admin emails / roles JSON", text: $adminEmails, axis: .vertical)
@@ -1356,6 +1369,7 @@ struct AdminConfigManagerView: View {
         isChristmasTime = dict["is_christmas_time"] as? Bool ?? false
         isMangaloreHymnsEnabled = dict["is_mangalore_hymns_enabled"] as? Bool ?? true
         pageFlipVisible = dict["page_flip_visible"] as? Bool ?? true
+        presenterModeEnabled = dict["presenter_mode_enabled"] as? Bool ?? false
         castEnabled = dict["cast_enabled"] as? Bool ?? false
         castAppId = dict["cast_app_id"] as? String ?? ""
         castReceiverUrl = dict["cast_receiver_url"] as? String ?? ""
@@ -1375,6 +1389,7 @@ struct AdminConfigManagerView: View {
         midiKeerthanesRanges = dict["midi_keerthanes_ranges"] as? String ?? ""
         disableOggFallback = dict["disable_ogg_fallback"] as? String ?? ""
         audioBackupUrl = dict["audio_backup_url"] as? String ?? ""
+        midiRefreshVersion = dict["midi_refresh_version"] as? String ?? ""
         masterRootPasscode = dict["master_root_passcode"] as? String ?? ""
     }
     
@@ -1385,6 +1400,7 @@ struct AdminConfigManagerView: View {
             "is_christmas_time": isChristmasTime,
             "is_mangalore_hymns_enabled": isMangaloreHymnsEnabled,
             "page_flip_visible": pageFlipVisible,
+            "presenter_mode_enabled": presenterModeEnabled,
             "cast_enabled": castEnabled,
             "cast_app_id": castAppId,
             "cast_receiver_url": castReceiverUrl,
@@ -1404,6 +1420,7 @@ struct AdminConfigManagerView: View {
             "midi_keerthanes_ranges": midiKeerthanesRanges,
             "disable_ogg_fallback": disableOggFallback,
             "audio_backup_url": audioBackupUrl,
+            "midi_refresh_version": midiRefreshVersion,
             "master_root_passcode": masterRootPasscode
         ]
         
@@ -1438,6 +1455,14 @@ struct AdminConfigManagerView: View {
                             valObj = .string(v as? String ?? "")
                         }
                         
+                        if k == "midi_refresh_version" {
+                            // New key: update-only would silently do nothing, so insert-or-update.
+                            if midiRefreshVersion.isEmpty { continue }
+                            try await client.from("app_config")
+                                .upsert(ConfigRow(key: k, value: valObj), onConflict: "key")
+                                .execute()
+                            continue
+                        }
                         try await client.from("app_config")
                             .update(["value": valObj])
                             .eq("key", value: k)
@@ -1457,6 +1482,11 @@ struct AdminConfigManagerView: View {
             }
         }
     }
+}
+
+struct ConfigRow: Encodable {
+    let key: String
+    let value: ConfigVal
 }
 
 enum ConfigVal: Encodable {

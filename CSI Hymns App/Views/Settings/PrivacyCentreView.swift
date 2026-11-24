@@ -113,14 +113,9 @@ public struct PrivacyCentreView: View {
         .navigationBarTitleDisplayMode(.inline)
         .csiGlassNavigationBar(theme: theme)
         .toolbar(.hidden, for: .tabBar)
-        .alert("Withdraw consent?", isPresented: $showWithdrawConfirm) {
-            Button("Withdraw", role: .destructive) {
-                consent.withdrawRequiredConsent()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("You will be signed out and asked to review the notice again. Optional analytics and notifications stop immediately.")
-        }
+        .festiveAlert("Withdraw consent?", isPresented: $showWithdrawConfirm,
+                      message: "You will be signed out and asked to review the notice again. Optional analytics and notifications stop immediately.",
+                      buttons: [.cancel(), .destructive("Withdraw") { consent.withdrawRequiredConsent() }])
         .alert("Keep notifications on?", isPresented: $showPushDeclineDialog) {
             Button("Keep on", role: .cancel) {}
             Button("Turn off", role: .destructive) {

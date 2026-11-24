@@ -5,6 +5,7 @@ public struct SettingsView: View {
     @State private var theme = ThemeManager.shared
     @State private var supabase = SupabaseService.instance
     @State private var christmas = ChristmasModeService.shared
+    @State private var festive = FestiveAmbience.shared
     @State private var pageFlipVisibility = PageFlipVisibilityService.shared
     @State private var appConfig = AppConfigService.shared
     @State private var isShowingDeleteAlert = false
@@ -78,6 +79,19 @@ public struct SettingsView: View {
                         settingsRowLabel(title: "Christmas Mode", subtitle: "Enable festive theme and Christmas carols", iconName: "snowflake")
                     }
                     .tint(theme.accentColor)
+                    
+                    if christmas.isChristmasTime {
+                        Picker(selection: effectsBinding) {
+                            Text("Off").tag(FestiveEffectsLevel.off)
+                            Text("Gentle").tag(FestiveEffectsLevel.gentle)
+                        } label: {
+                            settingsRowLabel(title: "Snow & effects", subtitle: "Falling snow, tilt and shake", iconName: "cloud.snow")
+                        }
+                        Toggle(isOn: eggsBinding) {
+                            settingsRowLabel(title: "Easter eggs", subtitle: "\(festive.foundSecrets.count) of \(FestiveSecret.allCases.count) found", iconName: "gift")
+                        }
+                        .tint(theme.accentColor)
+                    }
                     
                     Picker(
                         selection: $midiInstrumentId,
@@ -216,7 +230,8 @@ public struct SettingsView: View {
                 Section {
                     HStack {
                         Spacer()
-                        Text("CSI Hymns v5.1.0")
+                        let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "5.3.0"
+                        Text("CSI Hymns v\(appVersion)")
                             .font(.caption)
                             .foregroundColor(theme.textSecondary)
                             .onLongPressGesture(minimumDuration: 3.0) {
@@ -239,57 +254,27 @@ public struct SettingsView: View {
         }
         .csiGlassNavigationBar(theme: theme)
         .toolbar(.hidden, for: .tabBar) // Hide Bottom Tabbar
-        .alert("Deactivate Account?", isPresented: $isShowingDeleteAlert) {
-            Button("Cancel", role: .cancel) {}
-            Button("Deactivate", role: .destructive) {
-                Task {
-                    await deleteAccountCascade()
-                }
-            }
-        } message: {
-            Text("You will be signed out and the account will be marked as deactivated. Your record is kept internally and is not permanently erased.")
-        }
-        .alert("Clear Caches?", isPresented: $isShowingClearCacheAlert) {
-            Button("Cancel", role: .cancel) {}
-            Button("Clear Everything", role: .destructive) {
-                Task {
-                    await clearCachesAsync()
-                }
-            }
-        } message: {
-            Text("This will delete all downloaded Sunday liturgies, cache indexes, and local song data. Offline songs will be auto-redownloaded when you go online. Your favorites and account settings are safe.")
-        }
-        .alert("Clear History?", isPresented: $isShowingClearHistoryAlert) {
-            Button("Cancel", role: .cancel) {}
-            Button("Clear History", role: .destructive) {
-                Task {
-                    await clearHistoryAsync()
-                }
-            }
-        } message: {
-            Text("This will wipe out all your recent song logs, viewed tracks, and search query history. Saved favorites will remain unchanged.")
-        }
-        .alert("Update Available", isPresented: Binding(
+        .festiveAlert("Deactivate Account?", isPresented: $isShowingDeleteAlert,
+                      message: "You will be signed out and the account will be marked as deactivated. Your record is kept internally and is not permanently erased.",
+                      buttons: [.cancel(), .destructive("Deactivate") { Task { await deleteAccountCascade() } }])
+        .festiveAlert("Clear Caches?", isPresented: $isShowingClearCacheAlert,
+                      message: "This will delete all downloaded Sunday liturgies, cache indexes, and local song data. Offline songs will be auto-redownloaded when you go online. Your favorites and account settings are safe.",
+                      buttons: [.cancel(), .destructive("Clear Everything") { Task { await clearCachesAsync() } }])
+        .festiveAlert("Clear History?", isPresented: $isShowingClearHistoryAlert,
+                      message: "This will wipe out all your recent song logs, viewed tracks, and search query history. Saved favorites will remain unchanged.",
+                      buttons: [.cancel(), .destructive("Clear History") { Task { await clearHistoryAsync() } }])
+        .festiveAlert("Update Available", isPresented: Binding(
             get: { updateInfo != nil },
             set: { if !$0 { updateInfo = nil } }
-        )) {
-            Button("Later", role: .cancel) { updateInfo = nil }
-            Button("Update") {
-                if let url = updateInfo.flatMap({ URL(string: $0.trackViewUrl) }) {
-                    UIApplication.shared.open(url)
-                }
+        ), message: updateInfo.map { "Version \($0.storeVersion) is available on the App Store." }, buttons: [
+            .cancel("Later") { updateInfo = nil },
+            .normal("Update") {
+                if let url = updateInfo.flatMap({ URL(string: $0.trackViewUrl) }) { UIApplication.shared.open(url) }
                 updateInfo = nil
             }
-        } message: {
-            if let info = updateInfo {
-                Text("Version \(info.storeVersion) is available on the App Store.")
-            }
-        }
-        .alert("Up to Date", isPresented: $showUpToDateAlert) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("You're on the latest App Store version.")
-        }
+        ])
+        .festiveAlert("Up to Date", isPresented: $showUpToDateAlert,
+                      message: "You're on the latest App Store version.", buttons: [.cancel("OK")])
         .onAppear {
             midiInstrumentId = MidiInstruments.currentProgramId
             refreshAdminEntry()
@@ -311,6 +296,14 @@ public struct SettingsView: View {
     }
     
     // MARK: - Bindings
+    
+    private var effectsBinding: Binding<FestiveEffectsLevel> {
+        Binding(get: { festive.level }, set: { festive.level = $0 })
+    }
+    
+    private var eggsBinding: Binding<Bool> {
+        Binding(get: { festive.easterEggsEnabled }, set: { festive.easterEggsEnabled = $0 })
+    }
     
     private var christmasBinding: Binding<Bool> {
         Binding(
@@ -527,6 +520,8 @@ public struct SettingsView: View {
     private func clearCachesAsync() async {
         isClearing = true
         try? await Task.sleep(for: .seconds(0.8))
+        // Downloaded MIDI tunes, the tune list and temp files.
+        await CacheCleaner.clearAll()
         
         let fileManager = FileManager.default
         if let cacheDir = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first {

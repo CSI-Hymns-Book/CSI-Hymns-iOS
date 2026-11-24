@@ -30,6 +30,9 @@ public struct OrderPage: Codable, Identifiable, Hashable, Sendable {
 
 /// A premium, glassmorphic liturgy browser listing Regular Sunday and Festival service guides.
 public struct OrderOfServiceListView: View {
+    /// Read once when the screen opens: while it animates away after "Home" the section is
+    /// already cleared, and a live check would swap the toolbar mid-animation and jolt the list.
+    @State private var showsHomeButton = AppNavigationService.shared.activeSection != nil
     @Binding var selectedTab: Int
     @State private var theme = ThemeManager.shared
     @State private var showEnglishPrimary = true
@@ -224,12 +227,10 @@ public struct OrderOfServiceListView: View {
             .navigationBarTitleDisplayMode(.inline)
             .csiGlassNavigationBar(theme: theme)
             .toolbar {
-                if AppNavigationService.shared.activeSection != nil {
+                if showsHomeButton {
                     ToolbarItem(placement: .topBarLeading) {
                         Button(action: {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                AppNavigationService.shared.activeSection = nil
-                            }
+                            BookNavigation.goHome()
                         }) {
                             HStack(spacing: 3) {
                                 Image(systemName: "chevron.left")
