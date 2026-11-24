@@ -143,6 +143,7 @@ public struct WelcomeChangelogView: View {
                 .fill(Color(hex: "132237"))
                 .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.12), lineWidth: 1))
         )
+        .festiveDialogDecor()
     }
     
     /// Dialog showing standard what's new changelogs.
@@ -224,6 +225,7 @@ public struct WelcomeChangelogView: View {
                 .fill(Color(hex: "0D1B2A"))
                 .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.12), lineWidth: 1))
         )
+        .festiveDialogDecor()
     }
     
     // MARK: - Helpers & Data Methods

@@ -135,5 +135,86 @@ for _ in 0..<(30 * 20) { engine.step(dt: 1.0 / 30, density: 1, tilt: 0, flurry: 
 engine.step(dt: 1.0 / 30, density: 1, tilt: 0, flurry: false, surfaces: [moved])
 check(engine.settled.allSatisfy { $0.y == 120 }, "settled snow follows its card when it scrolls")
 
+// Gift drop: surprises, flight drops, landing, riding a card, falling off, tapping.
+var odds = [GiftSurprise: Int]()
+for percent in 0..<100 { odds[GiftSurprise.pick(roll: Double(percent) / 100 + 0.001), default: 0] += 1 }
+check(GiftSurprise.allCases.allSatisfy { odds[$0] == $0.weight }, "surprise odds match their weights")
+check(GiftSurprise.allCases.map(\.weight).reduce(0, +) == 100, "surprise weights total 100")
+check(GiftSurprise.pick(roll: 0) == .confetti && GiftSurprise.pick(roll: 0.9999) == .star, "roll edges pick first and last")
+
+var drops = GiftDrops()
+drops.startFlight()
+drops.flight(progress: 0.1, x: 50, y: 50, allowed: true)
+check(drops.isEmpty, "no gift before the first drop point")
+drops.flight(progress: 0.23, x: 50, y: 50, allowed: true)
+drops.flight(progress: 0.24, x: 60, y: 50, allowed: true)
+check(drops.gifts.count == 1, "one gift per drop point")
+drops.flight(progress: 0.5, x: 120, y: 50, allowed: true)
+drops.flight(progress: 0.9, x: 220, y: 50, allowed: true)
+check(drops.gifts.count == 3, "three gifts over a full flight")
+drops.startFlight()
+drops.flight(progress: 0.9, x: 220, y: 50, allowed: true)
+check(drops.gifts.count == GiftDrops.maxGifts, "never more than the cap on screen")
+
+var quiet = GiftDrops()
+quiet.startFlight()
+quiet.flight(progress: 1, x: 10, y: 10, allowed: false)
+check(quiet.isEmpty, "no gifts when not allowed (reading screens)")
+
+let shelf = FestiveSurface(key: UUID(), left: 0, right: 400, top: 300)
+var landing = GiftDrops()
+landing.startFlight()
+landing.flight(progress: 0.23, x: 200, y: 80, allowed: true)
+var landedEvents: [GiftEvent] = []
+for _ in 0..<(30 * 8) { landedEvents += landing.step(dt: 1.0 / 30, surfaces: [shelf], height: 800) }
+check(landedEvents.count == 1, "a gift lands once on the card it crosses")
+for _ in 0..<(30 * 6) { _ = landing.step(dt: 1.0 / 30, surfaces: [shelf], height: 800) }
+check(landing.isEmpty, "a gift that is never opened sinks away")
+
+var riding = GiftDrops()
+riding.startFlight()
+riding.flight(progress: 0.23, x: 200, y: 80, allowed: true)
+for _ in 0..<(30 * 4) { _ = riding.step(dt: 1.0 / 30, surfaces: [shelf], height: 800) }
+let scrolled = FestiveSurface(key: shelf.key, left: 0, right: 400, top: 180)
+_ = riding.step(dt: 1.0 / 30, surfaces: [scrolled], height: 800)
+check(riding.gifts.first.map { near($0.y, 180 - GiftDrops.halfSize) } ?? false, "a landed gift rides its card when it scrolls")
+
+var falling = GiftDrops()
+falling.startFlight()
+falling.flight(progress: 0.23, x: 200, y: 80, allowed: true)
+for _ in 0..<(30 * 12) { _ = falling.step(dt: 1.0 / 30, surfaces: [], height: 800) }
+check(falling.isEmpty, "with no card below, a gift falls off the screen")
+
+var tapping = GiftDrops()
+tapping.startFlight()
+tapping.flight(progress: 0.23, x: 200, y: 200, allowed: true)
+check(tapping.open(atX: 400, y: 600) == nil, "a tap far from any gift opens nothing")
+let opened = tapping.open(atX: 215, y: 190)
+check(opened != nil && tapping.gifts.first?.state == .opening, "a tap near a gift opens it")
+check(tapping.open(atX: 215, y: 190) == nil, "an opening gift cannot be opened twice")
+for _ in 0..<45 { _ = tapping.step(dt: 1.0 / 30, surfaces: [], height: 800) }
+check(tapping.isEmpty, "an opened gift disappears after its animation")
+
+// Countdown across time zones: the same instant is a different local date in different places.
+func zone(_ id: String) -> TimeZone { TimeZone(identifier: id)! }
+func instant(_ iso: String) -> Date { ISO8601DateFormatter().date(from: iso)! }
+let eveUTC = instant("2026-12-24T20:00:00Z")
+check(FestiveCalendar.moment(for: eveUTC, in: zone("America/New_York")) == .christmasEve, "tz: New York is still Christmas Eve")
+check(FestiveCalendar.moment(for: eveUTC, in: zone("America/Los_Angeles")) == .christmasEve, "tz: Los Angeles is still Christmas Eve")
+check(FestiveCalendar.moment(for: eveUTC, in: zone("Asia/Kolkata")) == .christmasDay, "tz: India has reached Christmas Day")
+check(FestiveCalendar.moment(for: eveUTC, in: zone("Pacific/Kiritimati")) == .christmasDay, "tz: UTC+14 has reached Christmas Day")
+let novUTC = instant("2026-11-24T10:00:00Z")
+check(FestiveCalendar.daysToChristmas(from: novUTC, in: zone("America/New_York")) == 31, "tz: 31 days in New York")
+check(FestiveCalendar.daysToChristmas(from: novUTC, in: zone("Asia/Kolkata")) == 31, "tz: 31 days in India")
+check(FestiveCalendar.daysToChristmas(from: novUTC, in: zone("Pacific/Kiritimati")) == 30, "tz: 30 days once UTC+14 passes midnight")
+check(FestiveCalendar.daysToChristmas(from: novUTC, in: zone("Pacific/Pago_Pago")) == 32, "tz: 32 days while UTC-11 is still yesterday")
+check(FestiveCalendar.daysToChristmas(from: instant("2026-10-31T16:00:00Z"), in: zone("America/New_York")) == 55, "dst: the clocks going back do not change the count")
+check(FestiveCalendar.daysToChristmas(from: instant("2026-03-01T12:00:00Z"), in: zone("Europe/London")) == 299, "dst: count from spring is whole days")
+check(FestiveCalendar.daysToChristmas(from: instant("2026-12-25T12:00:00Z"), in: zone("Asia/Kolkata")) == 0, "countdown is 0 on Christmas Day")
+check(FestiveCalendar.daysToChristmas(from: instant("2026-12-26T12:00:00Z"), in: zone("Asia/Kolkata")) == 364, "from the 26th it counts to next Christmas")
+check(FestiveCalendar.countdownLabel(instant("2026-12-24T12:00:00Z"), in: zone("UTC")) == "1 day to Christmas", "label says 1 day")
+check(FestiveCalendar.adventLabel(novUTC, in: zone("Asia/Kolkata")) == "Advent begins Sun 29 Nov", "advent label in India")
+check(FestiveCalendar.adventLabel(novUTC, in: zone("Pacific/Kiritimati")) == "Advent begins Sun 29 Nov", "advent label at UTC+14")
+
 print(failures == 0 ? "ALL PASSED" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

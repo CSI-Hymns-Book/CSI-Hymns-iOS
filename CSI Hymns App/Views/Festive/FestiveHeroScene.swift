@@ -8,7 +8,7 @@ final class FestiveHeroModel: @unchecked Sendable {
     var snowmanPieceStartedAt: [Double] = []
     var snowmanStage: Int { snowmanPieceStartedAt.count }
     var isSnowmanDone: Bool { snowmanStage >= 3 }
-    let moment: FestiveMoment
+    var moment: FestiveMoment
     let start = Date()
     /// Seconds on the scene clock (the same one the renderer uses).
     var clock: Double { Date().timeIntervalSince(start) }

@@ -475,16 +475,9 @@ public struct HymnsListView: View {
                 .sheet(isPresented: $isShowingJumpSheet) {
                     jumpToMeterSheet(scrollProxy: scrollProxy)
                 }
-                .alert("Refresh lyrics?", isPresented: $isShowingRefreshConfirmAlert) {
-                    Button("Cancel", role: .cancel) { }
-                    Button("Refresh") {
-                        Task {
-                            await performManualRefresh()
-                        }
-                    }
-                } message: {
-                    Text("We'll fetch any updated and corrected lyrics from the cloud.")
-                }
+                .festiveAlert("Refresh lyrics?", isPresented: $isShowingRefreshConfirmAlert,
+                              message: "We'll fetch any updated and corrected lyrics from the cloud.",
+                              buttons: [.cancel(), .normal("Refresh") { Task { await performManualRefresh() } }])
             }
         }
         .task {

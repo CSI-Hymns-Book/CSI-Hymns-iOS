@@ -98,7 +98,13 @@ enum FestiveSnowfallRenderer {
                 var c = ctx
                 c.opacity = min(1, fade * 3)
                 c.draw(Text("🎁").font(.system(size: p.size)), at: CGPoint(x: p.x, y: p.y))
+            case .emoji:
+                FestiveGiftDrawing.drawEmoji(in: &ctx, particle: p, alpha: 1)
             }
+        }
+
+        if level != .off {
+            for gift in sim.gifts.gifts { FestiveGiftDrawing.draw(in: &ctx, gift: gift, alpha: max(0.5, dim)) }
         }
 
         if level != .off, let pose = sim.santaPose(width: size.width) {

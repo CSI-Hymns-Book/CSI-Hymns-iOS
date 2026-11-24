@@ -65,11 +65,8 @@ public struct ChristmasCarolsListView: View {
             }
             .toolbar(.hidden, for: .tabBar)
             .sheet(isPresented: $viewModel.isShowingCreateChurch) { AddChurchFormView() }
-            .alert("Sign In Required", isPresented: $isShowingSignInPrompt) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text("Sign in to create a church or add songs/PDFs.")
-            }
+            .festiveAlert("Sign In Required", isPresented: $isShowingSignInPrompt,
+                          message: "Sign in to create a church or add songs/PDFs.", buttons: [.cancel("OK")])
             .appToast(message: $toastMessage, isError: toastIsError)
             .task { await syncCarols() }
             .onChange(of: service.lastErrorMessage) { _, msg in if let msg { toastMessage = msg; toastIsError = true } }
@@ -229,6 +226,7 @@ private struct FestiveCarolsScreen: View {
             .padding(.horizontal, 18).frame(height: 52)
             .background(Capsule().fill(palette.gold))
             .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
+            .festiveFloatingCap()
         }
         .padding(.trailing, 20).padding(.bottom, 24)
     }

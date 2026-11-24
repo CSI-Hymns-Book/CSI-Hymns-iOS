@@ -42,6 +42,8 @@ private struct FestiveHome: View {
     @State private var collectionsHeight = FestiveHomeSession.collectionsHeight
     @State private var sideColumnHeight = FestiveHomeSession.sideColumnHeight
     @State private var showSecrets = false
+    /// The date the labels are built from. Refreshed at midnight, on a time zone change and on return.
+    @State private var today = Date()
     @State private var starCounter = StarTapCounter()
     @State private var gloria = false
     @State private var verseIndex = 0
@@ -84,6 +86,10 @@ private struct FestiveHome: View {
         .sheet(isPresented: $showSecrets) { FestiveSecretsSheet() }
         .onAppear { ambience.sim.darkSkyBehind = !palette.isNight; startMoments() }
         .onDisappear { ambience.sim.darkSkyBehind = false }
+        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in refreshToday() }
+        .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in refreshToday() }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in refreshToday() }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in refreshToday() }
         .task {
             guard !entrancesDone else { return }
             try? await Task.sleep(for: .seconds(1.4))
@@ -96,6 +102,13 @@ private struct FestiveHome: View {
                 if !gloria { withAnimation(.easeInOut(duration: 0.6)) { verseIndex = (verseIndex + 1) % festiveVerses.count } }
             }
         }
+    }
+
+    /// Re-reads the date for the countdown and the day-specific scene (Eve candles, caravan stop).
+    private func refreshToday() {
+        today = Date()
+        heroModel.moment = FestiveCalendar.moment(for: today)
+        ambience.refreshMoment()
     }
 
     // MARK: Layouts
@@ -230,7 +243,7 @@ private struct FestiveHome: View {
     private var countdownChip: some View {
         HStack(spacing: 8) {
             Circle().fill(Color(hex: "D6493D")).frame(width: 8, height: 8)
-            Text(FestiveCalendar.chipLabel(Date())).font(.system(size: 13.5, weight: .semibold)).foregroundStyle(FestivePalette.night.ink)
+            Text(FestiveCalendar.chipLabel(today)).font(.system(size: 13.5, weight: .semibold)).foregroundStyle(FestivePalette.night.ink)
         }
         .padding(.horizontal, 13).padding(.vertical, 7)
         .background(Capsule().fill(FestivePalette.night.glassHigh))
@@ -282,7 +295,7 @@ private struct FestiveHome: View {
             HStack {
                 Text("COLLECTIONS").font(.system(size: 11.5, weight: .bold)).tracking(1.6).foregroundStyle(palette.inkMuted)
                 Spacer()
-                Text(FestiveCalendar.adventLabel(Date())).font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.gold)
+                Text(FestiveCalendar.adventLabel(today)).font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.gold)
             }
             .padding(.horizontal, 4).padding(.top, compact ? 8 : 4)
             .festiveEntrance(4, enabled: !entrancesDone)

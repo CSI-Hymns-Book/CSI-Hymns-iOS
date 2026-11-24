@@ -15,6 +15,7 @@ final class FestiveAmbience {
 
     private static let secretsKey = "christmas_secrets_found"
     private static let eggsKey = "christmas_easter_eggs"
+    private static let giftsKey = "christmas_gifts_opened"
 
     var level: FestiveEffectsLevel {
         didSet {
@@ -29,13 +30,15 @@ final class FestiveAmbience {
     private(set) var foundSecrets: Set<FestiveSecret>
     private(set) var toast: FestiveToast?
     private(set) var shakeGeneration = 0
+    /// Gifts opened so far; five open the Gift collector secret.
+    private(set) var giftsOpened = UserDefaults.standard.integer(forKey: "christmas_gifts_opened")
 
     @ObservationIgnored let sim = FestiveSimulation()
     @ObservationIgnored private var nextToastId = 0
     @ObservationIgnored private var releaseDim: [Int: Bool] = [:]
     @ObservationIgnored private var nextDimToken = 0
 
-    let moment = FestiveCalendar.moment(for: Date())
+    private(set) var moment = FestiveCalendar.moment(for: Date())
 
     var effectiveLevel: FestiveEffectsLevel { sim.effectiveLevel }
     var eggsActive: Bool { easterEggsEnabled && effectiveLevel != .off }
@@ -56,6 +59,15 @@ final class FestiveAmbience {
         }
     }
 
+    /// Re-reads today's special day (Christmas Eve, New Year...) after midnight or a time zone change.
+    func refreshMoment() {
+        let now = FestiveCalendar.moment(for: Date())
+        guard now != moment else { return }
+        moment = now
+        sim.moment = now
+        if now == .christmasEve { sim.setEarlySanta() }
+    }
+
     // MARK: Events from the simulation
 
     fileprivate func handle(_ event: FestiveEvent) {
@@ -63,7 +75,16 @@ final class FestiveAmbience {
         case .secret(let secret, let message): discover(secret, message: message)
         case .haptic(let pattern): FestiveHaptics.shared.play(pattern)
         case .toast(let text): showToast(text)
+        case .giftOpened(let surprise): giftWasOpened(surprise)
         }
+    }
+
+    private func giftWasOpened(_ surprise: GiftSurprise) {
+        giftsOpened += 1
+        UserDefaults.standard.set(giftsOpened, forKey: Self.giftsKey)
+        showToast("🎁 Gift \(min(giftsOpened, giftCollectorGoal)) of \(giftCollectorGoal) · \(surprise.title)")
+        // Finding the secret replaces the gift toast with "Gift collector · n of 9".
+        if giftsOpened >= giftCollectorGoal { discover(.gifts, message: "🎁 Gift collector") }
     }
 
     // MARK: Secrets and toasts
@@ -82,6 +103,8 @@ final class FestiveAmbience {
     func resetSecrets() {
         foundSecrets = []
         UserDefaults.standard.removeObject(forKey: Self.secretsKey)
+        giftsOpened = 0
+        UserDefaults.standard.removeObject(forKey: Self.giftsKey)
         sim.resetTiltAnnouncement()
         showToast("Secrets reset · find them all again")
     }

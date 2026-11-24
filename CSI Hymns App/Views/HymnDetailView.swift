@@ -1349,6 +1349,7 @@ public struct HymnDetailView: View {
                 }
             }
         }
+        .festiveDialogDecor(inside: true)
     }
 
     // MARK: - Helpers

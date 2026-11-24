@@ -45,6 +45,8 @@ public struct RootTabView: View {
                     .zIndex(2)
                 FestiveToastHost()
                     .zIndex(3)
+                FestiveAlertHost()
+                    .zIndex(4)
             }
             
             if isShowingMenuShowcase {
@@ -180,6 +182,7 @@ public struct RootTabView: View {
                         RoundedRectangle(cornerRadius: 24)
                             .stroke(theme.strokeColor, lineWidth: 1)
                     )
+                    .festiveDialogDecor()
                     .padding(.horizontal, 30)
                     .shadow(color: Color.black.opacity(0.25), radius: 15, y: 10)
                     .transition(.scale.combined(with: .opacity))

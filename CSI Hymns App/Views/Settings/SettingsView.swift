@@ -254,57 +254,27 @@ public struct SettingsView: View {
         }
         .csiGlassNavigationBar(theme: theme)
         .toolbar(.hidden, for: .tabBar) // Hide Bottom Tabbar
-        .alert("Deactivate Account?", isPresented: $isShowingDeleteAlert) {
-            Button("Cancel", role: .cancel) {}
-            Button("Deactivate", role: .destructive) {
-                Task {
-                    await deleteAccountCascade()
-                }
-            }
-        } message: {
-            Text("You will be signed out and the account will be marked as deactivated. Your record is kept internally and is not permanently erased.")
-        }
-        .alert("Clear Caches?", isPresented: $isShowingClearCacheAlert) {
-            Button("Cancel", role: .cancel) {}
-            Button("Clear Everything", role: .destructive) {
-                Task {
-                    await clearCachesAsync()
-                }
-            }
-        } message: {
-            Text("This will delete all downloaded Sunday liturgies, cache indexes, and local song data. Offline songs will be auto-redownloaded when you go online. Your favorites and account settings are safe.")
-        }
-        .alert("Clear History?", isPresented: $isShowingClearHistoryAlert) {
-            Button("Cancel", role: .cancel) {}
-            Button("Clear History", role: .destructive) {
-                Task {
-                    await clearHistoryAsync()
-                }
-            }
-        } message: {
-            Text("This will wipe out all your recent song logs, viewed tracks, and search query history. Saved favorites will remain unchanged.")
-        }
-        .alert("Update Available", isPresented: Binding(
+        .festiveAlert("Deactivate Account?", isPresented: $isShowingDeleteAlert,
+                      message: "You will be signed out and the account will be marked as deactivated. Your record is kept internally and is not permanently erased.",
+                      buttons: [.cancel(), .destructive("Deactivate") { Task { await deleteAccountCascade() } }])
+        .festiveAlert("Clear Caches?", isPresented: $isShowingClearCacheAlert,
+                      message: "This will delete all downloaded Sunday liturgies, cache indexes, and local song data. Offline songs will be auto-redownloaded when you go online. Your favorites and account settings are safe.",
+                      buttons: [.cancel(), .destructive("Clear Everything") { Task { await clearCachesAsync() } }])
+        .festiveAlert("Clear History?", isPresented: $isShowingClearHistoryAlert,
+                      message: "This will wipe out all your recent song logs, viewed tracks, and search query history. Saved favorites will remain unchanged.",
+                      buttons: [.cancel(), .destructive("Clear History") { Task { await clearHistoryAsync() } }])
+        .festiveAlert("Update Available", isPresented: Binding(
             get: { updateInfo != nil },
             set: { if !$0 { updateInfo = nil } }
-        )) {
-            Button("Later", role: .cancel) { updateInfo = nil }
-            Button("Update") {
-                if let url = updateInfo.flatMap({ URL(string: $0.trackViewUrl) }) {
-                    UIApplication.shared.open(url)
-                }
+        ), message: updateInfo.map { "Version \($0.storeVersion) is available on the App Store." }, buttons: [
+            .cancel("Later") { updateInfo = nil },
+            .normal("Update") {
+                if let url = updateInfo.flatMap({ URL(string: $0.trackViewUrl) }) { UIApplication.shared.open(url) }
                 updateInfo = nil
             }
-        } message: {
-            if let info = updateInfo {
-                Text("Version \(info.storeVersion) is available on the App Store.")
-            }
-        }
-        .alert("Up to Date", isPresented: $showUpToDateAlert) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("You're on the latest App Store version.")
-        }
+        ])
+        .festiveAlert("Up to Date", isPresented: $showUpToDateAlert,
+                      message: "You're on the latest App Store version.", buttons: [.cancel("OK")])
         .onAppear {
             midiInstrumentId = MidiInstruments.currentProgramId
             refreshAdminEntry()

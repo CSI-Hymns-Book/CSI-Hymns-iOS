@@ -105,21 +105,18 @@ public struct ChurchDetailView: View {
                     }
             }
         }
-        .alert("Delete Church?", isPresented: $isShowingDeleteConfirm) {
-            Button("Cancel", role: .cancel) {}
-            Button("Delete", role: .destructive) {
-                Task {
-                    do {
-                        try await service.deleteChurch(id: church.id)
-                        toastMessage = "Church deleted."
-                    } catch {
-                        toastMessage = error.localizedDescription
-                    }
-                }
-            }
-        } message: {
-            Text("This removes the church and all songs/PDFs inside it. Only you or an admin can do this.")
-        }
+        .festiveAlert("Delete Church?", isPresented: $isShowingDeleteConfirm,
+                      message: "This removes the church and all songs/PDFs inside it. Only you or an admin can do this.",
+                      buttons: [.cancel(), .destructive("Delete") {
+                          Task {
+                              do {
+                                  try await service.deleteChurch(id: church.id)
+                                  toastMessage = "Church deleted."
+                              } catch {
+                                  toastMessage = error.localizedDescription
+                              }
+                          }
+                      }])
         .appToast(message: $toastMessage, isError: toastMessage?.contains("only") == true || toastMessage?.contains("Couldn't") == true)
     }
     

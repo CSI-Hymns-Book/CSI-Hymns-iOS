@@ -94,14 +94,9 @@ public struct ProfileEditView: View {
         }
         .navigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
-        .alert("Deactivate this account?", isPresented: $showDeleteConfirm) {
-            Button("Cancel", role: .cancel) {}
-            Button("Deactivate", role: .destructive) {
-                Task { await deleteAccount() }
-            }
-        } message: {
-            Text("You will be signed out. The account stays in our records as deactivated. This is not a permanent erase.")
-        }
+        .festiveAlert("Deactivate this account?", isPresented: $showDeleteConfirm,
+                      message: "You will be signed out. The account stays in our records as deactivated. This is not a permanent erase.",
+                      buttons: [.cancel(), .destructive("Deactivate") { Task { await deleteAccount() } }])
         .alert("Couldn’t complete", isPresented: Binding(
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }

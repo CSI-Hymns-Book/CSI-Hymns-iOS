@@ -34,7 +34,7 @@ public enum FestiveEffectsLevel: String, CaseIterable, Sendable {
 // MARK: - Secrets
 
 public enum FestiveSecret: String, CaseIterable, Sendable {
-    case star, bell, snowman, pop, lights, shake, tilt, santa
+    case star, bell, snowman, pop, lights, shake, tilt, santa, gifts
 
     public var hint: String {
         switch self {
@@ -46,6 +46,7 @@ public enum FestiveSecret: String, CaseIterable, Sendable {
         case .shake: return "Shake the phone"
         case .tilt: return "Tilt the phone"
         case .santa: return "Tap Santa’s sleigh as it flies past"
+        case .gifts: return "Open five of the gifts Santa drops"
         }
     }
 
@@ -82,14 +83,17 @@ public struct StarTapCounter: Sendable {
 public enum FestiveMoment: Equatable, Sendable { case none, christmasEve, christmasDay, newYear, epiphany }
 
 public enum FestiveCalendar {
-    private static var calendar: Calendar = {
+    /// A Gregorian calendar in `timeZone`. It is built on every call and defaults to the auto-updating
+    /// current zone: a calendar stored once keeps the zone it was created in, so it would show the
+    /// wrong day after travelling, a zone change or daylight saving.
+    private static func calendar(_ timeZone: TimeZone) -> Calendar {
         var c = Calendar(identifier: .gregorian)
-        c.timeZone = TimeZone.current
+        c.timeZone = timeZone
         return c
-    }()
+    }
 
-    public static func moment(for date: Date) -> FestiveMoment {
-        let c = calendar.dateComponents([.month, .day], from: date)
+    public static func moment(for date: Date, in timeZone: TimeZone = .autoupdatingCurrent) -> FestiveMoment {
+        let c = calendar(timeZone).dateComponents([.month, .day], from: date)
         switch (c.month ?? 0, c.day ?? 0) {
         case (12, 24): return .christmasEve
         case (12, 25): return .christmasDay
@@ -100,58 +104,63 @@ public enum FestiveCalendar {
     }
 
     /// Dec 25 through Jan 5.
-    public static func isChristmastide(_ date: Date) -> Bool {
-        let c = calendar.dateComponents([.month, .day], from: date)
+    public static func isChristmastide(_ date: Date, in timeZone: TimeZone = .autoupdatingCurrent) -> Bool {
+        let c = calendar(timeZone).dateComponents([.month, .day], from: date)
         guard let m = c.month, let d = c.day else { return false }
         return (m == 12 && d >= 25) || (m == 1 && d <= 5)
     }
 
-    /// Days until Christmas Day (0 on or after the 25th until the new year starts counting again).
-    public static func daysToChristmas(from date: Date) -> Int {
-        let year = calendar.component(.year, from: date)
-        var target = calendar.date(from: DateComponents(year: year, month: 12, day: 25))!
-        if calendar.startOfDay(for: date) > target {
-            target = calendar.date(from: DateComponents(year: year + 1, month: 12, day: 25))!
-        }
-        return calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: target).day ?? 0
+    /// Whole calendar days from the local date of `date` to the next 25 December (0 on the day itself;
+    /// from the 26th it counts to next year's). Calendar days, not 24-hour spans, so a daylight-saving
+    /// change never shifts the number.
+    public static func daysToChristmas(from date: Date, in timeZone: TimeZone = .autoupdatingCurrent) -> Int {
+        let cal = calendar(timeZone)
+        let today = cal.startOfDay(for: date)
+        let year = cal.component(.year, from: date)
+        var target = cal.date(from: DateComponents(year: year, month: 12, day: 25))!
+        if today > target { target = cal.date(from: DateComponents(year: year + 1, month: 12, day: 25))! }
+        return cal.dateComponents([.day], from: today, to: target).day ?? 0
     }
 
-    public static func countdownLabel(_ date: Date) -> String {
-        let n = daysToChristmas(from: date)
+    public static func countdownLabel(_ date: Date, in timeZone: TimeZone = .autoupdatingCurrent) -> String {
+        let n = daysToChristmas(from: date, in: timeZone)
         return n == 1 ? "1 day to Christmas" : "\(n) days to Christmas"
     }
 
     /// The Sunday that starts Advent: three weeks before the last Sunday on or before 24 December.
-    public static func adventStart(year: Int) -> Date {
-        let eve = calendar.date(from: DateComponents(year: year, month: 12, day: 24))!
-        let weekday = calendar.component(.weekday, from: eve) // Sunday = 1
-        let lastSunday = calendar.date(byAdding: .day, value: -(weekday - 1), to: eve)!
-        return calendar.date(byAdding: .day, value: -21, to: lastSunday)!
+    public static func adventStart(year: Int, in timeZone: TimeZone = .autoupdatingCurrent) -> Date {
+        let cal = calendar(timeZone)
+        let eve = cal.date(from: DateComponents(year: year, month: 12, day: 24))!
+        let weekday = cal.component(.weekday, from: eve) // Sunday = 1
+        let lastSunday = cal.date(byAdding: .day, value: -(weekday - 1), to: eve)!
+        return cal.date(byAdding: .day, value: -21, to: lastSunday)!
     }
 
-    public static func adventLabel(_ date: Date) -> String {
-        if isChristmastide(date) { return "Christmastide" }
-        let year = calendar.component(.year, from: date)
-        let month = calendar.component(.month, from: date)
+    public static func adventLabel(_ date: Date, in timeZone: TimeZone = .autoupdatingCurrent) -> String {
+        if isChristmastide(date, in: timeZone) { return "Christmastide" }
+        let cal = calendar(timeZone)
+        let year = cal.component(.year, from: date)
+        let month = cal.component(.month, from: date)
         guard month >= 10 else { return "" }
-        let start = adventStart(year: year)
-        let day = calendar.startOfDay(for: date)
+        let start = adventStart(year: year, in: timeZone)
+        let day = cal.startOfDay(for: date)
         if day < start {
             let f = DateFormatter()
             f.locale = Locale(identifier: "en_US_POSIX")
+            f.timeZone = timeZone
             f.dateFormat = "EEE d MMM"
             return "Advent begins \(f.string(from: start))"
         }
         return "Advent season"
     }
 
-    public static func chipLabel(_ date: Date) -> String {
-        switch moment(for: date) {
+    public static func chipLabel(_ date: Date, in timeZone: TimeZone = .autoupdatingCurrent) -> String {
+        switch moment(for: date, in: timeZone) {
         case .christmasEve: return "Christmas Eve"
         case .christmasDay: return "Christmas Day"
         case .newYear: return "Happy New Year"
         case .epiphany: return "Epiphany"
-        case .none: return isChristmastide(date) ? "Christmastide" : countdownLabel(date)
+        case .none: return isChristmastide(date, in: timeZone) ? "Christmastide" : countdownLabel(date, in: timeZone)
         }
     }
 }

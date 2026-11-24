@@ -5,6 +5,7 @@ enum FestiveEvent: Sendable {
     case secret(FestiveSecret, message: String?)
     case haptic(HapticPattern)
     case toast(String)
+    case giftOpened(GiftSurprise)
 }
 
 /// One snow pile on a card: its screen frame, its depth and how far it has slid sideways.
@@ -19,11 +20,17 @@ final class FestiveCapModel: @unchecked Sendable {
 
 /// Short-lived sparkles, confetti, gifts and rings (easter eggs and special days).
 final class FestiveEffects: @unchecked Sendable {
-    enum Kind { case spark, confetti, ring, gift }
+    enum Kind { case spark, confetti, ring, gift, emoji }
+    /// How an emoji particle moves: it falls, swings like a bell, pops up like a jack-in-the-box,
+    /// or rises and flies off.
+    enum EmojiStyle { case fall, swing, pop, rise }
     final class Particle {
         var kind = Kind.spark
         var x = 0.0, y = 0.0, vx = 0.0, vy = 0.0, life = 0.0, maxLife = 1.0, size = 3.0, rotation = 0.0, delay = 0.0
         var colorIndex = 0
+        var gravity = 0.0, spin = 0.0
+        var text = ""
+        var style = EmojiStyle.fall
     }
     static let colors: [Color] = [
         Color(hex: "FFD27A"), Color(hex: "FF6B5E"), Color(hex: "7BE0A0"), .white, Color(hex: "9CC8FF")
@@ -85,6 +92,66 @@ final class FestiveEffects: @unchecked Sendable {
         }
     }
 
+
+    // MARK: Gift surprises
+
+    /// Confetti thrown from a point, arcing up and falling back down.
+    func confettiBurst(x: Double, y: Double, count: Int = 44) {
+        for i in 0..<count {
+            let p = Particle(); p.kind = .confetti; p.x = x; p.y = y
+            p.vx = .random(in: -130...130) * unit; p.vy = .random(in: -260 ... -90) * unit; p.gravity = 380 * unit
+            p.maxLife = .random(in: 1.0...1.7); p.life = p.maxLife; p.size = .random(in: 6...10) * unit
+            p.colorIndex = i % Self.colors.count; p.rotation = .random(in: 0...6)
+            add(p)
+        }
+    }
+
+    /// A puff of snow where a gift lands.
+    func snowPuff(x: Double, y: Double) {
+        for _ in 0..<9 {
+            let p = Particle(); p.kind = .spark; p.x = x; p.y = y
+            let angle = -Double.pi * (0.1 + 0.8 * Double.random(in: 0...1)), speed = Double.random(in: 30...80) * unit
+            p.vx = cos(angle) * speed * 1.4; p.vy = sin(angle) * speed
+            p.maxLife = .random(in: 0.5...0.8); p.life = p.maxLife; p.size = .random(in: 2...4) * unit; p.colorIndex = 3
+            add(p)
+        }
+    }
+
+    private func emoji(_ text: String, x: Double, y: Double, style: EmojiStyle, size: Double, life: Double, delay: Double = 0) -> Particle {
+        let p = Particle(); p.kind = .emoji; p.text = text; p.style = style
+        p.x = x; p.y = y; p.size = size * unit; p.maxLife = life; p.life = life; p.delay = delay
+        add(p)
+        return p
+    }
+
+    func candyShower(width: Double, fallTo: Double) {
+        for i in 0..<9 {
+            let p = emoji("🍭", x: (Double(i) + 0.5) / 9 * width + .random(in: -10...10), y: -20 * unit, style: .fall, size: 24,
+                          life: .random(in: 1.1...1.7), delay: Double(i) * 0.07)
+            p.vy = max(fallTo, 200) / p.maxLife * 0.9; p.spin = .random(in: -4...4)
+        }
+    }
+
+    func bells(x: Double, y: Double) {
+        for side in [-1.0, 1.0] {
+            // `rotation` carries the swing direction for the drawing.
+            let bell = emoji("🔔", x: x + side * 18 * unit, y: y - 8 * unit, style: .swing, size: 30, life: 1.5)
+            bell.rotation = side
+        }
+        rings(x: x, y: y)
+    }
+
+    func snowman(x: Double, y: Double) {
+        _ = emoji("⛄", x: x, y: y, style: .pop, size: 40, life: 2.2)
+        sparkle(x: x, y: y - 30 * unit, count: 6)
+    }
+
+    func goldStar(x: Double, y: Double, width: Double) {
+        let p = emoji("⭐", x: x, y: y, style: .rise, size: 40, life: 1.7)
+        p.vx = width * 0.6; p.vy = -(y - 70 * unit)
+        sparkle(x: x, y: y - 30 * unit, count: 10)
+    }
+
     func step(dt: Double) {
         var i = 0
         while i < particles.count {
@@ -94,10 +161,12 @@ final class FestiveEffects: @unchecked Sendable {
             switch p.kind {
             case .spark: p.vy += 90 * unit * dt
             case .gift: p.vy += 260 * unit * dt
-            case .confetti: p.rotation += dt * 6
+            case .confetti: p.rotation += dt * 6; p.vy += p.gravity * dt
             case .ring: break
+            case .emoji: if p.style == .fall { p.rotation += p.spin * dt }
             }
-            p.x += p.vx * dt; p.y += p.vy * dt
+            // Bells, snowmen and stars are positioned from their age when drawn.
+            if !(p.kind == .emoji && p.style != .fall) { p.x += p.vx * dt; p.y += p.vy * dt }
             if p.life <= 0 { particles.remove(at: i) } else { i += 1 }
         }
     }
@@ -128,6 +197,10 @@ final class FestiveSimulation: @unchecked Sendable {
     private var santaStart: Double?
     private var nextSantaAt = 18.0
     private var nextFireworkAt = 0.0
+    private(set) var gifts = GiftDrops()
+    private var giftFlightStart: Double?
+    private var pendingSurprises: [(at: Double, kind: GiftSurprise, x: Double, y: Double)] = []
+    private var screenSize = CGSize.zero
     private var slideThrottle = SlideHapticThrottle(minGapMillis: 140)
     private var tiltAnnounced = false
     private var unit = 1.0
@@ -165,6 +238,7 @@ final class FestiveSimulation: @unchecked Sendable {
         lastFrame = now
         self.unit = unit
         effects.unit = unit
+        screenSize = size
         engine.resize(width: size.width, height: size.height, unit: unit)
 
         tilt += (rawTilt - tilt) * min(1, dt * 5)
@@ -177,6 +251,7 @@ final class FestiveSimulation: @unchecked Sendable {
         engine.step(dt: dt, density: effectiveLevel.snowDensity, tilt: tilt, flurry: time < flurryUntil, surfaces: surfaces)
         if effectiveLevel != .off { stepCaps(dt: dt) }
         effects.step(dt: dt)
+        stepGifts(dt: dt, surfaces: surfaces, height: size.height)
 
         if abs(rawTilt) > SnowCapMetrics.slideTiltDegrees, !tiltAnnounced, eggsEnabled {
             tiltAnnounced = true
@@ -214,6 +289,42 @@ final class FestiveSimulation: @unchecked Sendable {
 
     func resetTiltAnnouncement() { tiltAnnounced = false }
 
+    // MARK: Gifts
+
+    /// Gifts drop only on the home screen and lists, never behind lyrics.
+    private var giftsAllowed: Bool { eggsEnabled && effectiveLevel != .off && dimRequests == 0 }
+
+    private func stepGifts(dt: Double, surfaces: [FestiveSurface], height: Double) {
+        for event in gifts.step(dt: dt, surfaces: surfaces, height: height) {
+            if case .landed(let x, let y) = event {
+                effects.snowPuff(x: x, y: y)
+                if snowHapticsAllowed { onEvent?(.haptic(GiftHaptics.land)) }
+            }
+        }
+        while let next = pendingSurprises.first, next.at <= time {
+            pendingSurprises.removeFirst()
+            playSurprise(next.kind, x: next.x, y: next.y)
+        }
+    }
+
+    private func playSurprise(_ kind: GiftSurprise, x: Double, y: Double) {
+        switch kind {
+        case .confetti: effects.confettiBurst(x: x, y: y)
+        case .candy: effects.candyShower(width: screenSize.width, fallTo: screenSize.height)
+        case .bells: effects.bells(x: x, y: y)
+        case .snowman: effects.snowman(x: min(max(x, 34 * unit), screenSize.width - 34 * unit), y: y)
+        case .star: effects.goldStar(x: x, y: y, width: screenSize.width)
+        }
+    }
+
+    private func openGift(_ gift: FestiveGift) {
+        let kind = GiftSurprise.pick(roll: .random(in: 0..<1))
+        effects.sparkle(x: gift.x, y: gift.y, count: 10)
+        pendingSurprises.append((time + 0.38, kind, gift.x, gift.y))
+        if snowHapticsAllowed { onEvent?(.haptic(GiftHaptics.open)) }
+        onEvent?(.giftOpened(kind))
+    }
+
     // MARK: Santa and special days
 
     func santaPose(width: Double) -> SantaPose? {
@@ -222,6 +333,13 @@ final class FestiveSimulation: @unchecked Sendable {
     }
 
     func callSanta() { if santaStart == nil { santaStart = time } }
+
+    /// Starts a gift run when a new flight begins, then lets the flight drop its gifts.
+    private func dropGifts(pose: SantaPose) {
+        if giftFlightStart != santaStart { giftFlightStart = santaStart; gifts.startFlight() }
+        gifts.flight(progress: pose.progress, x: pose.x + 10 * unit, y: pose.y + 8 * unit, allowed: giftsAllowed,
+                     paletteSeed: Int.random(in: 0..<GiftDrops.paletteCount))
+    }
 
     private func advanceSanta(size: CGSize) {
         guard let start = santaStart else {
@@ -233,6 +351,7 @@ final class FestiveSimulation: @unchecked Sendable {
             nextSantaAt = time + .random(in: 60...90)
             return
         }
+        dropGifts(pose: pose)
         if Double.random(in: 0...1) < 0.5 { effects.sparkle(x: pose.x - 18 * unit, y: pose.y + 4 * unit, count: 1) }
     }
 
@@ -249,6 +368,10 @@ final class FestiveSimulation: @unchecked Sendable {
     /// A tap anywhere: catches Santa, or pops a drifting emoji. Returns true when it did.
     func handleTap(x: Double, y: Double, width: Double) -> Bool {
         guard eggsEnabled, effectiveLevel != .off else { return false }
+        if let gift = gifts.open(atX: x, y: y, radius: GiftDrops.tapRadius * unit) {
+            openGift(gift)
+            return true
+        }
         if let pose = santaPose(width: width), SantaFlight.isHit(pose, x: x, y: y, unit: unit) {
             effects.gifts(x: pose.x, y: pose.y)
             onEvent?(.secret(.santa, message: "🎅 Ho ho ho! You caught Santa"))
