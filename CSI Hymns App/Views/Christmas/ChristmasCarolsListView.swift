@@ -9,12 +9,11 @@ public final class ChristmasCarolsListViewModel {
     public init() {}
 
     public func filteredChurches(_ churches: [CarolChurch], service: ChristmasCarolsService) -> [CarolChurch] {
-        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !query.isEmpty else { return churches }
+        guard !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return churches }
         return churches.filter { church in
-            if church.name.lowercased().contains(query) { return true }
-            return service.songs(for: church.id).contains { $0.title.lowercased().contains(query) }
-                || service.pdfs(for: church.id).contains { $0.title.lowercased().contains(query) }
+            CarolSearch.matches(text: [church.name, church.description ?? ""].joined(separator: " "), query: searchQuery)
+                || !CarolSearch.filter(service.songs(for: church.id), query: searchQuery).isEmpty
+                || service.pdfs(for: church.id).contains { CarolSearch.matches(text: $0.title, query: searchQuery) }
         }
     }
 }
@@ -121,7 +120,7 @@ private struct FestiveCarolsScreen: View {
     private var searchBar: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass").foregroundStyle(palette.gold)
-            TextField("Search churches or carols…", text: $viewModel.searchQuery)
+            TextField("Search churches or carols, English or ಕನ್ನಡ", text: $viewModel.searchQuery)
                 .foregroundStyle(palette.ink).textInputAutocapitalization(.never)
             if !viewModel.searchQuery.isEmpty {
                 Button { viewModel.searchQuery = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(palette.inkMuted) }

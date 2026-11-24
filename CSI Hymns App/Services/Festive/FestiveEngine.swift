@@ -30,7 +30,7 @@ final class FestiveSnowEngine: @unchecked Sendable {
         var layer = 0
         var rank = 0.0
     }
-    final class Settled { var x = 0.0, y = 0.0, radius = 0.0, alpha = 0.0, life = 0.0, rotation = 0.0; var isFlake = false; var key = UUID() }
+    final class Settled { var x = 0.0, y = 0.0, radius = 0.0, alpha = 0.0, life = 0.0, age = 0.0, rotation = 0.0; var isFlake = false; var key = UUID() }
     final class Chunk { var x = 0.0, y = 0.0, vx = 0.0, vy = 0.0, radius = 0.0, life = 0.0 }
     final class Drifter {
         var emoji = "", x = 0.0, y = 0.0, speed = 0.0, phase = 0.0, hiddenSeconds = 0.0
@@ -47,6 +47,12 @@ final class FestiveSnowEngine: @unchecked Sendable {
     static let maxSettled = 90, maxChunks = 260
     /// Same threshold as the snow caps: past this the phone counts as tilted.
     static let slideTiltDegrees = 12.0
+    /// How visible a settled flake is: it fades in over a quarter second after landing (so it does
+    /// not pop into view) and fades out over its last two seconds.
+    static func settledFade(age: Double, life: Double) -> Double {
+        min(1, max(0, age) / 0.25) * min(1, max(0, life) / 2)
+    }
+
     private let landChance = 0.55, gravity = 520.0, settledSlide = 4.0
 
     func resize(width: Double, height: Double, unit: Double) {
@@ -148,6 +154,7 @@ final class FestiveSnowEngine: @unchecked Sendable {
                 }
             }
             s.life -= dt
+            s.age += dt
             if s.life <= 0 {
                 onAbsorb?(s.key)
                 settled.remove(at: i)

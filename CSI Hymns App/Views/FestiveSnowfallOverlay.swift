@@ -61,7 +61,7 @@ enum FestiveSnowfallRenderer {
                 }
             }
             for s in engine.settled {
-                let a = s.alpha * 0.9 * dim * min(1, s.life / 2)
+                let a = s.alpha * 0.9 * dim * FestiveSnowEngine.settledFade(age: s.age, life: s.life)
                 ctx.fill(Path(ellipseIn: CGRect(x: s.x - s.radius, y: s.y - s.radius, width: s.radius * 2, height: s.radius * 2)),
                          with: .color(snowColor.opacity(a)))
             }

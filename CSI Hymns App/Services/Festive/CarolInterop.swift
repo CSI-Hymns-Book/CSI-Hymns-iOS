@@ -81,15 +81,6 @@ public func churchColorSlot(_ name: String, slotCount: Int) -> Int {
     return Int(hash % UInt64(slotCount))
 }
 
-public func carolShareText(title: String, number: String?, churchName: String, lyrics: String) -> String {
-    var text = title
-    if let number, !number.isEmpty { text += " (No. \(number))" }
-    if !churchName.isEmpty { text += "\n\(churchName)" }
-    text += "\n\n\(lyrics.trimmingCharacters(in: .whitespacesAndNewlines))"
-    text += "\n\nShared from CSI Kannada Hymns"
-    return text
-}
-
 /// Splits lyrics into verses at blank lines.
 public func splitStanzas(_ lyrics: String) -> [String] {
     lyrics.replacingOccurrences(of: "\r\n", with: "\n")
@@ -100,4 +91,21 @@ public func splitStanzas(_ lyrics: String) -> [String] {
             // "\n \n" style gaps (a blank line holding spaces) also separate verses.
             block.components(separatedBy: "\n \n").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         }
+}
+
+// MARK: - Presenter paging
+
+/// Which way a tap on the presenter moves: the left half goes back, the right half goes forward.
+enum PresenterTap: Equatable, Sendable {
+    case previous, next
+
+    static func at(x: Double, width: Double) -> PresenterTap { x < width / 2 ? .previous : .next }
+}
+
+enum PresenterPaging {
+    /// The page after a move, kept inside 0..<count.
+    static func moved(_ page: Int, by step: Int, count: Int) -> Int { clamped(page + step, count: count) }
+
+    /// Keeps a page number valid if the verses change while presenting.
+    static func clamped(_ page: Int, count: Int) -> Int { min(max(page, 0), max(count - 1, 0)) }
 }

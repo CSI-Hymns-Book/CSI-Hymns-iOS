@@ -293,7 +293,7 @@ struct FestiveSongRow<Badge: View, Trailing: View>: View {
                 .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(badgeBackground))
             VStack(alignment: .leading, spacing: 2) {
                 Text(label.uppercased())
-                    .font(.system(size: 10.5, weight: .bold)).tracking(1.2)
+                    .font(.system(size: 11.5, weight: .heavy)).tracking(1.2)
                     .foregroundStyle(palette.gold)
                 Text(title)
                     .font(.festiveSerif(18))

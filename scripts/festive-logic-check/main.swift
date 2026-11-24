@@ -113,7 +113,6 @@ check(CarolRecents.push(["1", "2", "3"], "4", max: 3) == ["4", "1", "2"], "recen
 check(near(CarolTextScale.bigger(1), 1.1) && near(CarolTextScale.smaller(0.8), 0.8) && near(CarolTextScale.bigger(1.8), 1.8), "text scale steps")
 check(churchInitials("St. Paul's Church") == "SP" && churchInitials("Bethel") == "B" && churchInitials("   ") == "✦", "initials")
 check(churchColorSlot("Bethel", slotCount: 5) == churchColorSlot("Bethel", slotCount: 5), "stable colour")
-check(carolShareText(title: "Joy", number: "12", churchName: "Bethel", lyrics: "Line one") == "Joy (No. 12)\nBethel\n\nLine one\n\nShared from CSI Kannada Hymns", "share text")
 check(splitStanzas("1. A\nB\n\n  \n2. C\r\n\r\nD ") == ["1. A\nB", "2. C", "D"], "stanzas")
 
 
@@ -215,6 +214,95 @@ check(FestiveCalendar.daysToChristmas(from: instant("2026-12-26T12:00:00Z"), in:
 check(FestiveCalendar.countdownLabel(instant("2026-12-24T12:00:00Z"), in: zone("UTC")) == "1 day to Christmas", "label says 1 day")
 check(FestiveCalendar.adventLabel(novUTC, in: zone("Asia/Kolkata")) == "Advent begins Sun 29 Nov", "advent label in India")
 check(FestiveCalendar.adventLabel(novUTC, in: zone("Pacific/Kiritimati")) == "Advent begins Sun 29 Nov", "advent label at UTC+14")
+
+// Review parity: settled snow fades in, presenter taps and paging, Christmas Day greeting only on the 25th.
+check(near(FestiveSnowEngine.settledFade(age: 0, life: 5), 0), "a flake that just landed is invisible, not full opacity")
+check(near(FestiveSnowEngine.settledFade(age: 0.125, life: 5), 0.5), "a flake is half visible midway through the fade-in")
+check(near(FestiveSnowEngine.settledFade(age: 1, life: 5), 1), "a settled flake is fully visible after the fade-in")
+check(near(FestiveSnowEngine.settledFade(age: 3, life: 1), 0.5), "a flake fades out over its last two seconds")
+check(near(FestiveSnowEngine.settledFade(age: 3, life: -1), 0), "an expired flake is invisible")
+let fadeEngine = FestiveSnowEngine()
+fadeEngine.resize(width: 400, height: 800, unit: 1)
+let fadeCard = FestiveSurface(key: UUID(), left: 20, right: 380, top: 300)
+var sawFreshFlake = false
+for _ in 0..<(30 * 20) {
+    fadeEngine.step(dt: 1.0 / 30, density: 1, tilt: 0, flurry: false, surfaces: [fadeCard])
+    if fadeEngine.settled.contains(where: { $0.age > 0 && $0.age < 0.1 && FestiveSnowEngine.settledFade(age: $0.age, life: $0.life) < 0.5 }) { sawFreshFlake = true }
+}
+check(sawFreshFlake, "flakes that land in the engine start faint and age upward")
+
+check(PresenterTap.at(x: 50, width: 400) == .previous && PresenterTap.at(x: 250, width: 400) == .next, "presenter: left half goes back, right half goes forward")
+check(PresenterTap.at(x: 200, width: 400) == .next, "presenter: the exact middle goes forward")
+check(PresenterPaging.moved(0, by: -1, count: 5) == 0 && PresenterPaging.moved(4, by: 1, count: 5) == 4, "presenter: stops at the first and last verse")
+check(PresenterPaging.clamped(7, count: 3) == 2 && PresenterPaging.clamped(2, count: 0) == 0, "presenter: a page past the end is pulled back when verses change")
+
+var greetingDays = 0
+var greetingWrong = 0
+var cursor = instant("2026-01-01T12:00:00Z")
+let utc = TimeZone(identifier: "UTC")!
+var utcCal = Calendar(identifier: .gregorian); utcCal.timeZone = utc
+while cursor < instant("2028-12-31T12:00:00Z") {
+    let c = utcCal.dateComponents([.month, .day], from: cursor)
+    let label = FestiveCalendar.chipLabel(cursor, in: utc)
+    if label == "Christmas Day" { greetingDays += 1; if !(c.month == 12 && c.day == 25) { greetingWrong += 1 } }
+    if c.month == 12 && c.day == 25 && label != "Christmas Day" { greetingWrong += 1 }
+    if FestiveCalendar.daysToChristmas(from: cursor, in: utc) < 0 { greetingWrong += 1 }
+    cursor = utcCal.date(byAdding: .day, value: 1, to: cursor)!
+}
+check(greetingDays == 3 && greetingWrong == 0, "Christmas Day shows only on 25 December across 2026-2028")
+
+// Carol search: English finds Kannada by sound, Kannada finds English, numbers ignore verse numbers.
+func carol(_ title: String, _ number: String?, _ lyrics: String, scale: String = "C Major") -> CarolSong {
+    CarolSong(churchId: UUID(), title: title, songNumber: number, lyrics: lyrics, scale: scale, createdByUserId: UUID())
+}
+let joyCarol = carol("ಯೇಸು ಹುಟ್ಟಿದನು", "12",
+                     CarolBilingual.join(kannada: "ಯೇಸು ಕ್ರಿಸ್ತನು ಜನಿಸಿದನು\nಹಾಡಿರಿ ಸಂತೋಷದಿಂದ", english: "Jesus Christ was born\nSing with joy"), scale: "G Major")
+let starCarol = carol("ಬೆತ್ಲೆಹೇಮಿನ ನಕ್ಷತ್ರ", "7", "ಬೆತ್ಲೆಹೇಮ್ ನಕ್ಷತ್ರ ಮಿನುಗಿತು")
+let englishOnlyCarol = carol("Silent night", "3", "Jesus Christ is born")
+let verseCarol = carol("Hark", "9", "1. Hark the herald\n2. Sing")
+let carolLibrary = [joyCarol, starCarol, englishOnlyCarol, verseCarol]
+func found(_ query: String) -> [UUID] { CarolSearch.filter(carolLibrary, query: query).map(\.id) }
+
+check(found("") == carolLibrary.map(\.id) && found("   ") == carolLibrary.map(\.id), "search: an empty query returns every song")
+check(KannadaRoman.transliterate("ಕರ್ತನು") == "kartanu", "search: Kannada is spelled out in roman letters")
+check(CarolSearch.plain("೧೨") == "12", "search: Kannada digits become 0-9")
+check(CarolSearch.phoneticKey("Yesu") == CarolSearch.phoneticKey("ಯೇಸು"), "search: Yesu sounds like ಯೇಸು")
+check(CarolSearch.phoneticKey("Jesus") == CarolSearch.phoneticKey("Yesus"), "search: Jesus sounds like Yesus")
+check(found("yesu").contains(joyCarol.id), "search: typing yesu finds the Kannada title ಯೇಸು")
+check(found("jesus").contains(joyCarol.id) && found("jesus").contains(englishOnlyCarol.id), "search: jesus finds the Kannada song and the English one")
+check(found("bethlehem") == [starCarol.id], "search: bethlehem finds ಬೆತ್ಲೆಹೇಮಿನ")
+check(found("nakshatra") == [starCarol.id], "search: nakshatra finds the Kannada lyrics")
+check(found("sing with joy") == [joyCarol.id], "search: English translation text is searched")
+check(found("G Major").contains(joyCarol.id) && !found("G Major").contains(starCarol.id), "search: the scale is searched")
+check(found("12") == [joyCarol.id] && found("7") == [starCarol.id], "search: a song number finds its song")
+check(found("1") == [joyCarol.id], "search: a number never matches the verse numbers inside lyrics")
+check(found("ಯೇಸು").contains(joyCarol.id) && found("ಯೇಸು").contains(englishOnlyCarol.id), "search: typing Kannada finds Kannada and English-text songs")
+check(found("yesu 12") == [joyCarol.id] && found("yesu 7").isEmpty, "search: every word has to match")
+check(found("zebra").isEmpty, "search: an unrelated word finds nothing")
+check(CarolSearch.matches(text: "Wesley Church, Mysore", query: "mysore") && !CarolSearch.matches(text: "Wesley Church", query: "mysore"), "search: church names use the same matching")
+check(CarolBilingual.split(CarolBilingual.join(kannada: "ಕ", english: "A")) == (kannada: "ಕ", english: "A"), "lyrics: joining then splitting gives the parts back")
+check(CarolBilingual.join(kannada: " ಕ ", english: "  ") == "ಕ", "lyrics: no English means no divider")
+
+// Carol permissions: only the church's owner or an admin may delete; the song's uploader may edit.
+let owner = UUID(), uploader = UUID(), stranger = UUID()
+check(CarolPermissions.canDelete(userId: owner, churchOwnerId: owner, isAdmin: false), "perm: the church owner can delete")
+check(!CarolPermissions.canDelete(userId: uploader, churchOwnerId: owner, isAdmin: false), "perm: a song's uploader who does not own the church cannot delete")
+check(!CarolPermissions.canDelete(userId: stranger, churchOwnerId: owner, isAdmin: false), "perm: a stranger cannot delete")
+check(!CarolPermissions.canDelete(userId: nil, churchOwnerId: owner, isAdmin: false), "perm: signed out cannot delete")
+check(!CarolPermissions.canDelete(userId: owner, churchOwnerId: nil, isAdmin: false), "perm: an unknown church owner cannot be matched")
+check(CarolPermissions.canDelete(userId: stranger, churchOwnerId: owner, isAdmin: true), "perm: an admin can delete anything")
+check(CarolPermissions.canEditSong(userId: uploader, churchOwnerId: owner, songOwnerId: uploader, isAdmin: false), "perm: the song's uploader can edit it")
+check(CarolPermissions.canEditSong(userId: owner, churchOwnerId: owner, songOwnerId: uploader, isAdmin: false), "perm: the church owner can edit a song")
+check(!CarolPermissions.canEditSong(userId: stranger, churchOwnerId: owner, songOwnerId: uploader, isAdmin: false), "perm: a stranger cannot edit")
+check(CarolPermissions.canEditSong(userId: stranger, churchOwnerId: owner, songOwnerId: uploader, isAdmin: true), "perm: an admin can edit")
+
+// Christmas mode: the user's own choice beats the server, then server, cache and season.
+check(ChristmasModeResolver.resolve(manual: true, remote: false, cachedRemote: false, season: false) == true, "mode: manual ON beats a server that says off")
+check(ChristmasModeResolver.resolve(manual: false, remote: true, cachedRemote: true, season: true) == false, "mode: manual OFF beats a server that says on")
+check(ChristmasModeResolver.resolve(manual: nil, remote: true, cachedRemote: false, season: false) == true, "mode: with no manual choice the server decides")
+check(ChristmasModeResolver.resolve(manual: nil, remote: nil, cachedRemote: true, season: false) == true, "mode: offline uses the last server value")
+check(ChristmasModeResolver.resolve(manual: nil, remote: nil, cachedRemote: nil, season: true) == true, "mode: with nothing else the season decides")
+check(ChristmasModeResolver.resolve(manual: true, remote: nil, cachedRemote: nil, season: false) == true, "mode: manual ON survives an offline relaunch")
 
 print(failures == 0 ? "ALL PASSED" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

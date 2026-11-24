@@ -5,10 +5,24 @@ import Observation
 final class AddCarolSongFormViewModel {
     var title = ""
     var songNumber = ""
+    var scale = "C Major"
     var lyricsKannada = ""
     var lyricsEnglish = ""
     var isSaving = false
     var errorMessage: String?
+    /// Set when editing a song that already exists; nil when adding a new one.
+    let editing: CarolSong?
+
+    init(editing: CarolSong? = nil) {
+        self.editing = editing
+        guard let song = editing else { return }
+        let parts = CarolBilingual.split(song.lyrics)
+        title = song.title
+        songNumber = song.songNumber ?? ""
+        scale = song.scale
+        lyricsKannada = parts.kannada
+        lyricsEnglish = parts.english ?? ""
+    }
     
     var isValid: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -20,13 +34,25 @@ final class AddCarolSongFormViewModel {
         isSaving = true
         errorMessage = nil
         do {
-            _ = try await ChristmasCarolsService.shared.addSong(
-                churchId: churchId,
-                title: title,
-                songNumber: songNumber.isEmpty ? nil : songNumber,
-                lyricsKannada: lyricsKannada,
-                lyricsEnglish: lyricsEnglish
-            )
+            if let editing {
+                _ = try await ChristmasCarolsService.shared.updateSong(
+                    id: editing.id,
+                    title: title,
+                    songNumber: songNumber.isEmpty ? nil : songNumber,
+                    lyricsKannada: lyricsKannada,
+                    lyricsEnglish: lyricsEnglish,
+                    scale: scale
+                )
+            } else {
+                _ = try await ChristmasCarolsService.shared.addSong(
+                    churchId: churchId,
+                    title: title,
+                    songNumber: songNumber.isEmpty ? nil : songNumber,
+                    lyricsKannada: lyricsKannada,
+                    lyricsEnglish: lyricsEnglish,
+                    scale: scale.trimmingCharacters(in: .whitespaces).isEmpty ? "C Major" : scale
+                )
+            }
             isSaving = false
             return true
         } catch {
@@ -37,14 +63,15 @@ final class AddCarolSongFormViewModel {
     }
 }
 
-/// Add a lyrics/text song inside an existing church.
+/// Add a lyrics/text song inside an existing church, or edit one that is already there.
 public struct AddCarolSongFormView: View {
     let church: CarolChurch
     @Environment(\.dismiss) private var dismiss
-    @State private var viewModel = AddCarolSongFormViewModel()
+    @State private var viewModel: AddCarolSongFormViewModel
     
-    public init(church: CarolChurch) {
+    public init(church: CarolChurch, editing: CarolSong? = nil) {
         self.church = church
+        _viewModel = State(initialValue: AddCarolSongFormViewModel(editing: editing))
     }
     
     public var body: some View {
@@ -66,6 +93,10 @@ public struct AddCarolSongFormView: View {
                             Divider().background(Color.white.opacity(0.15))
                             TextField("Song number (optional)", text: $viewModel.songNumber)
                                 .keyboardType(.numberPad)
+                                .foregroundStyle(.white)
+                            Divider().background(Color.white.opacity(0.15))
+                            TextField("Scale (for example C Major)", text: $viewModel.scale)
+                                .textInputAutocapitalization(.words)
                                 .foregroundStyle(.white)
                         }
                         
@@ -94,7 +125,7 @@ public struct AddCarolSongFormView: View {
                                 if await viewModel.submit(churchId: church.id) { dismiss() }
                             }
                         } label: {
-                            Text(viewModel.isSaving ? "Saving…" : "Add Song")
+                            Text(viewModel.isSaving ? "Saving…" : (viewModel.editing == nil ? "Add Song" : "Save changes"))
                                 .font(.headline)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
@@ -107,7 +138,7 @@ public struct AddCarolSongFormView: View {
                     .padding(20)
                 }
             }
-            .navigationTitle("Add Song")
+            .navigationTitle(viewModel.editing == nil ? "Add Song" : "Edit Song")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
