@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// App-wide Christmas layer: snowfall, snow that lands on cards, drifting emoji, easter-egg
 /// effects and Santa's sleigh. Draw-only: it never intercepts touches (taps are caught by the
@@ -124,13 +125,53 @@ extension View {
 
 private struct FestiveTapCatcher: ViewModifier {
     func body(content: Content) -> some View {
-        GeometryReader { geo in
-            content.simultaneousGesture(
-                SpatialTapGesture(coordinateSpace: .global).onEnded { tap in
-                    let ambience = FestiveAmbience.shared
-                    _ = ambience.handleTap(x: tap.location.x, y: tap.location.y, width: geo.size.width)
-                }
-            )
+        content.background(FestiveTapObserver())
+    }
+}
+
+/// Watches taps with a UIKit recognizer on the window. It never delays or cancels touches, so
+/// buttons, list rows and scrolling underneath behave exactly as without it. (A SwiftUI
+/// `simultaneousGesture` wrapped around the whole app made some taps on pushed screens such as
+/// Settings fail to register.)
+private struct FestiveTapObserver: UIViewRepresentable {
+    func makeUIView(context: Context) -> ObserverView { ObserverView() }
+    func updateUIView(_ view: ObserverView, context: Context) {}
+    static func dismantleUIView(_ view: ObserverView, coordinator: ()) { view.detach() }
+
+    final class ObserverView: UIView {
+        private let recognizer = UITapGestureRecognizer()
+        private let relay = Relay()
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            isUserInteractionEnabled = false
+            recognizer.addTarget(self, action: #selector(tapped(_:)))
+            recognizer.cancelsTouchesInView = false
+            recognizer.delaysTouchesBegan = false
+            recognizer.delaysTouchesEnded = false
+            recognizer.delegate = relay
         }
+
+        required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            detach()
+            window?.addGestureRecognizer(recognizer)
+        }
+
+        func detach() { recognizer.view?.removeGestureRecognizer(recognizer) }
+
+        @objc private func tapped(_ gesture: UITapGestureRecognizer) {
+            guard gesture.state == .ended, let window else { return }
+            let point = gesture.location(in: window)
+            _ = FestiveAmbience.shared.handleTap(x: point.x, y: point.y, width: window.bounds.width)
+        }
+    }
+
+    /// Lets the recognizer run alongside every other recognizer and never gates their touches.
+    private final class Relay: NSObject, UIGestureRecognizerDelegate {
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
     }
 }
